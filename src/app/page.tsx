@@ -53,10 +53,13 @@ export default function HomePage() {
     const formatDate = (date: Date) =>
         `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
+    const formattedDate = formatDate(newStartDate);
+    console.log("Nouvelle tâche, date formatée :", formattedDate);
+
     const newTask: Task = {
       id: Date.now().toString(),
       text: newTaskName,
-      start_date: formatDate(newStartDate),
+      start_date: formattedDate,
       duration: newDuration,
       progress: newProgress,
       open: true,
@@ -69,6 +72,20 @@ export default function HomePage() {
     setNewDuration(1);
     setNewProgress(0);
     setIsModalOpen(false);
+  };
+
+  // Callback pour mettre à jour une tâche depuis le Gantt
+  const handleTaskUpdate = (updatedTask: any) => {
+    // Si start_date est un objet Date, le convertir en chaîne au format "YYYY-MM-DD HH:mm"
+    if (updatedTask.start_date instanceof Date) {
+      const pad = (n: number) => (n < 10 ? '0' + n : n);
+      updatedTask.start_date = `${updatedTask.start_date.getFullYear()}-${pad(updatedTask.start_date.getMonth() + 1)}-${pad(updatedTask.start_date.getDate())} ${pad(updatedTask.start_date.getHours())}:${pad(updatedTask.start_date.getMinutes())}`;
+    }
+    setTasks(prevTasks =>
+        prevTasks.map(task =>
+            task.id === updatedTask.id ? { ...task, ...updatedTask } : task
+        )
+    );
   };
 
   const handleDeleteTask = (id: string) => {
@@ -98,19 +115,8 @@ export default function HomePage() {
             </button>
           </div>
 
-          <section className="card mb-4">
-            <div className="card-body">
-              <h2 className="card-title">Diagramme de Gantt</h2>
-              {tasks.length === 0 ? (
-                  <p>Aucune tâche ajoutée. Cliquez sur "Ajouter une tâche" pour démarrer.</p>
-              ) : (
-                  <GanttChart tasksData={tasksData} />
-              )}
-            </div>
-          </section>
-
           {/* Liste des tâches */}
-          <section className="card">
+          <section className="card mb-4">
             <div className="card-body">
               <h2 className="card-title">Liste des Tâches</h2>
               {tasks.length === 0 ? (
@@ -122,7 +128,7 @@ export default function HomePage() {
                           <div>
                             <h5 className="mb-1">{task.text}</h5>
                             <small>
-                              Début : {task.start_date} | Durée : {task.duration} jour(s) | Progression : {task.progress * 100}%
+                              Début : {task.start_date} | Durée : {task.duration} jour(s) | Progression : {Math.round(task.progress * 100)}%
                             </small>
                           </div>
                           <button
@@ -135,6 +141,17 @@ export default function HomePage() {
                         </li>
                     ))}
                   </ul>
+              )}
+            </div>
+          </section>
+
+          <section className="card mb-4">
+            <div className="card-body">
+              <h2 className="card-title">Diagramme de Gantt</h2>
+              {tasks.length === 0 ? (
+                  <p>Aucune tâche ajoutée. Cliquez sur "Ajouter une tâche" pour démarrer.</p>
+              ) : (
+                  <GanttChart tasksData={tasksData} onTaskUpdate={handleTaskUpdate} />
               )}
             </div>
           </section>
