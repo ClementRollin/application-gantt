@@ -10,14 +10,14 @@
   },
   "dependencies": {
     "axios": "^1.8.4",
-    "gantt-task-react": "^0.3.9",
-    "next": "15.1.2",
+    "dhtmlx-gantt": "^9.0.6",
+    "next": "^15.2.3",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "swr": "^2.3.3"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.0.14",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
