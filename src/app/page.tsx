@@ -1,6 +1,11 @@
 "use client";
+import dynamic from 'next/dynamic';
 import React, { useEffect, useState } from 'react';
-import GanttChart from './components/GanttChart';
+
+// Importation dynamique du composant GanttChartComponent (uniquement côté client)
+const GanttChart = dynamic(() => import('./components/GanttChart'), {
+  ssr: false,
+});
 
 export default function HomePage() {
   const [tasksData, setTasksData] = useState<any>(null);
@@ -11,6 +16,7 @@ export default function HomePage() {
     try {
       const res = await fetch('/api/trello');
       const data = await res.json();
+      console.log("Données API :", data);
       if (data.data) {
         setTasksData(data);
       }

@@ -3,9 +3,9 @@ import React, { useEffect, useRef } from 'react';
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
 import gantt from 'dhtmlx-gantt';
 
-type GanttChartProps = {
+interface GanttChartProps {
     tasksData: any;
-};
+}
 
 const GanttChart: React.FC<GanttChartProps> = ({ tasksData }) => {
     const ganttContainer = useRef<HTMLDivElement>(null);
