@@ -19,6 +19,22 @@ interface Task {
   open: boolean;
 }
 
+// Fonction utilitaire pour formater une date en chaîne
+const formatDate = (date: Date): string => {
+  const pad = (n: number) => (n < 10 ? '0' + n : n);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+// Fonction qui convertit une valeur en chaîne de date (si c'est un objet Date)
+const convertToStringDate = (d: any): string => {
+  if (d instanceof Date) {
+    return formatDate(d);
+  } else if (typeof d === "string") {
+    return d;
+  }
+  return "";
+};
+
 export default function HomePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -33,7 +49,11 @@ export default function HomePage() {
   useEffect(() => {
     const storedTasks = localStorage.getItem('tasks');
     if (storedTasks) {
-      setTasks(JSON.parse(storedTasks));
+      const parsed = JSON.parse(storedTasks).map((t: any) => ({
+        ...t,
+        start_date: convertToStringDate(t.start_date)
+      }));
+      setTasks(parsed);
     }
   }, []);
 
@@ -48,11 +68,6 @@ export default function HomePage() {
       alert('Veuillez remplir tous les champs.');
       return;
     }
-    // Formatage de la date en "YYYY-MM-DD HH:mm"
-    const pad = (n: number) => (n < 10 ? '0' + n : n);
-    const formatDate = (date: Date) =>
-        `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-
     const formattedDate = formatDate(newStartDate);
     console.log("Nouvelle tâche, date formatée :", formattedDate);
 
@@ -76,10 +91,9 @@ export default function HomePage() {
 
   // Callback pour mettre à jour une tâche depuis le Gantt
   const handleTaskUpdate = (updatedTask: any) => {
-    // Si start_date est un objet Date, le convertir en chaîne au format "YYYY-MM-DD HH:mm"
-    if (updatedTask.start_date instanceof Date) {
-      const pad = (n: number) => (n < 10 ? '0' + n : n);
-      updatedTask.start_date = `${updatedTask.start_date.getFullYear()}-${pad(updatedTask.start_date.getMonth() + 1)}-${pad(updatedTask.start_date.getDate())} ${pad(updatedTask.start_date.getHours())}:${pad(updatedTask.start_date.getMinutes())}`;
+    // Convertir systématiquement start_date en chaîne si nécessaire
+    if (updatedTask.start_date) {
+      updatedTask.start_date = convertToStringDate(updatedTask.start_date);
     }
     setTasks(prevTasks =>
         prevTasks.map(task =>
@@ -128,7 +142,7 @@ export default function HomePage() {
                           <div>
                             <h5 className="mb-1">{task.text}</h5>
                             <small>
-                              Début : {task.start_date} | Durée : {task.duration} jour(s) | Progression : {Math.round(task.progress * 100)}%
+                              Début : {convertToStringDate(task.start_date)} | Durée : {task.duration} jour(s) | Progression : {Math.round(task.progress * 100)}%
                             </small>
                           </div>
                           <button
@@ -171,7 +185,7 @@ export default function HomePage() {
               <div className="modal show fade d-block" tabIndex={-1} role="dialog">
                 <div className="modal-dialog" role="document">
                   <div className="modal-content">
-                    <div className="modal-header">
+                    <div className="modal-header d-flex justify-content-between">
                       <h5 className="modal-title">Ajouter une tâche</h5>
                       <button type="button" className="close" onClick={() => setIsModalOpen(false)} aria-label="Close">
                         <span aria-hidden="true">&times;</span>
@@ -179,7 +193,7 @@ export default function HomePage() {
                     </div>
                     <form onSubmit={handleAddTask}>
                       <div className="modal-body">
-                        <div className="form-group">
+                        <div className="form-group mb-3">
                           <label>Nom de la tâche</label>
                           <input
                               type="text"
@@ -189,7 +203,7 @@ export default function HomePage() {
                               placeholder="Ex: Conception UI"
                           />
                         </div>
-                        <div className="form-group">
+                        <div className="form-group d-flex flex-column mb-3">
                           <label>Date de début</label>
                           <DatePicker
                               selected={newStartDate}
@@ -202,8 +216,8 @@ export default function HomePage() {
                               className="form-control"
                           />
                         </div>
-                        <div className="form-row">
-                          <div className="form-group col-md-6">
+                        <div className="form-row mb-3">
+                          <div className="form-group col-md-6 mb-3">
                             <label>Durée (en jours)</label>
                             <input
                                 type="number"
