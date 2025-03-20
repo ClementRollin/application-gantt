@@ -13,6 +13,7 @@
     "dhtmlx-gantt": "^9.0.6",
     "next": "^15.2.3",
     "react": "^18.0.0",
+    "react-datepicker": "^8.2.1",
     "react-dom": "^18.0.0",
     "swr": "^2.3.3"
   },
