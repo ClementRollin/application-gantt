@@ -53,10 +53,13 @@ export default function HomePage() {
     const formatDate = (date: Date) =>
         `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
+    const formattedDate = formatDate(newStartDate);
+    console.log("Nouvelle tâche, date formatée :", formattedDate);
+
     const newTask: Task = {
       id: Date.now().toString(),
       text: newTaskName,
-      start_date: formatDate(newStartDate),
+      start_date: formattedDate,
       duration: newDuration,
       progress: newProgress,
       open: true,
@@ -71,6 +74,20 @@ export default function HomePage() {
     setIsModalOpen(false);
   };
 
+  // Callback pour mettre à jour une tâche depuis le Gantt
+  const handleTaskUpdate = (updatedTask: any) => {
+    // Si start_date est un objet Date, le convertir en chaîne au format "YYYY-MM-DD HH:mm"
+    if (updatedTask.start_date instanceof Date) {
+      const pad = (n: number) => (n < 10 ? '0' + n : n);
+      updatedTask.start_date = `${updatedTask.start_date.getFullYear()}-${pad(updatedTask.start_date.getMonth() + 1)}-${pad(updatedTask.start_date.getDate())} ${pad(updatedTask.start_date.getHours())}:${pad(updatedTask.start_date.getMinutes())}`;
+    }
+    setTasks(prevTasks =>
+        prevTasks.map(task =>
+            task.id === updatedTask.id ? { ...task, ...updatedTask } : task
+        )
+    );
+  };
+
   const handleDeleteTask = (id: string) => {
     setTasks(prev => prev.filter(task => task.id !== id));
   };
@@ -81,159 +98,148 @@ export default function HomePage() {
   };
 
   return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="d-flex flex-column min-vh-100 bg-light">
         {/* Header */}
-        <header className="bg-gradient-to-r from-blue-700 to-blue-500 text-white py-6 shadow-lg">
-          <div className="container mx-auto px-4">
-            <h1 className="text-4xl font-bold">Mon Application de Gantt</h1>
-            <p className="mt-2 text-lg">Organisez et suivez vos projets en toute simplicité</p>
+        <header className="bg-primary text-white py-3 shadow">
+          <div className="container">
+            <h1 className="display-4">Mon Application de Gantt</h1>
+            <p className="lead">Organisez et suivez vos projets en toute simplicité</p>
           </div>
         </header>
 
         {/* Contenu principal */}
-        <main className="container mx-auto px-4 py-8">
-          <div className="flex justify-end mb-6">
-            <button
-                onClick={() => setIsModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-full shadow transition duration-200"
-            >
+        <main className="container flex-grow-1 py-4">
+          <div className="d-flex justify-content-end mb-3">
+            <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
               Ajouter une tâche
             </button>
           </div>
 
-          <section className="bg-white rounded-xl shadow-lg p-8 mb-8">
-            <h2 className="text-3xl font-semibold mb-6">Diagramme de Gantt</h2>
-            {tasks.length === 0 ? (
-                <p className="text-gray-600 text-lg">
-                  Aucune tâche ajoutée. Cliquez sur "Ajouter une tâche" pour démarrer.
-                </p>
-            ) : (
-                <GanttChart tasksData={tasksData} />
-            )}
+          {/* Liste des tâches */}
+          <section className="card mb-4">
+            <div className="card-body">
+              <h2 className="card-title">Liste des Tâches</h2>
+              {tasks.length === 0 ? (
+                  <p>Aucune tâche à afficher.</p>
+              ) : (
+                  <ul className="list-group">
+                    {tasks.map(task => (
+                        <li key={task.id} className="list-group-item d-flex justify-content-between align-items-center">
+                          <div>
+                            <h5 className="mb-1">{task.text}</h5>
+                            <small>
+                              Début : {task.start_date} | Durée : {task.duration} jour(s) | Progression : {Math.round(task.progress * 100)}%
+                            </small>
+                          </div>
+                          <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => handleDeleteTask(task.id)}
+                              title="Supprimer la tâche"
+                          >
+                            &times;
+                          </button>
+                        </li>
+                    ))}
+                  </ul>
+              )}
+            </div>
           </section>
 
-          {/* Liste des tâches avec possibilité de suppression */}
-          <section className="bg-white rounded-xl shadow-lg p-8">
-            <h2 className="text-2xl font-semibold mb-4">Liste des Tâches</h2>
-            {tasks.length === 0 ? (
-                <p className="text-gray-600">Aucune tâche à afficher.</p>
-            ) : (
-                <ul className="space-y-4">
-                  {tasks.map(task => (
-                      <li key={task.id} className="flex items-center justify-between border-b pb-2">
-                        <div>
-                          <p className="text-lg font-medium">{task.text}</p>
-                          <p className="text-sm text-gray-500">
-                            Début : {task.start_date} | Durée : {task.duration} jour(s) | Progression : {task.progress * 100}%
-                          </p>
-                        </div>
-                        <button
-                            onClick={() => handleDeleteTask(task.id)}
-                            className="text-red-500 hover:text-red-600 transition-colors"
-                            title="Supprimer la tâche"
-                        >
-                          {/* Icône simple (vous pouvez remplacer par une icône via react-icons par exemple) */}
-                          &#128465;
-                        </button>
-                      </li>
-                  ))}
-                </ul>
-            )}
+          <section className="card mb-4">
+            <div className="card-body">
+              <h2 className="card-title">Diagramme de Gantt</h2>
+              {tasks.length === 0 ? (
+                  <p>Aucune tâche ajoutée. Cliquez sur "Ajouter une tâche" pour démarrer.</p>
+              ) : (
+                  <GanttChart tasksData={tasksData} onTaskUpdate={handleTaskUpdate} />
+              )}
+            </div>
           </section>
         </main>
 
-        {/* Footer */}
-        <footer className="bg-gray-800 text-white py-4 mt-12">
-          <div className="container mx-auto px-4 text-center">
-            <p>&copy; {new Date().getFullYear()} Mon Application de Gantt. Tous droits réservés.</p>
+        {/* Footer collé en bas */}
+        <footer className="bg-dark text-white py-3">
+          <div className="container text-center">
+            <p className="mb-0">&copy; {new Date().getFullYear()} Mon Application de Gantt. Tous droits réservés.</p>
           </div>
         </footer>
 
-        {/* Modal pour ajouter une tâche */}
+        {/* Modal et overlay pour désactiver la page */}
         {isModalOpen && (
-            <div className="fixed inset-0 flex items-center justify-center z-50 transition-opacity">
-              {/* Overlay */}
-              <div
-                  className="fixed inset-0 bg-black opacity-60"
-                  onClick={() => setIsModalOpen(false)}
-              ></div>
-              {/* Contenu de la modal */}
-              <div className="bg-white rounded-xl shadow-2xl z-50 p-8 w-11/12 max-w-lg transform transition-transform duration-300 scale-100">
-                <h2 className="text-2xl font-bold mb-4 text-gray-800">Ajouter une tâche</h2>
-                <form onSubmit={handleAddTask} className="space-y-5">
-                  <div>
-                    <label className="block text-gray-700 font-medium mb-1">
-                      Nom de la tâche
-                    </label>
-                    <input
-                        type="text"
-                        value={newTaskName}
-                        onChange={(e) => setNewTaskName(e.target.value)}
-                        className="w-full border border-gray-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Ex : Conception UI"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 font-medium mb-1">
-                      Date de début
-                    </label>
-                    <DatePicker
-                        selected={newStartDate}
-                        onChange={(date: Date | null) => setNewStartDate(date)}
-                        showTimeSelect
-                        timeFormat="HH:mm"
-                        timeIntervals={15}
-                        dateFormat="yyyy-MM-dd HH:mm"
-                        placeholderText="Sélectionnez une date"
-                        className="w-full border border-gray-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-gray-700 font-medium mb-1">
-                        Durée (en jours)
-                      </label>
-                      <input
-                          type="number"
-                          value={newDuration}
-                          onChange={(e) => setNewDuration(Number(e.target.value))}
-                          min="1"
-                          className="w-full border border-gray-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+            <>
+              <div className="fullpage-overlay" onClick={() => setIsModalOpen(false)}></div>
+              <div className="modal show fade d-block" tabIndex={-1} role="dialog">
+                <div className="modal-dialog" role="document">
+                  <div className="modal-content">
+                    <div className="modal-header">
+                      <h5 className="modal-title">Ajouter une tâche</h5>
+                      <button type="button" className="close" onClick={() => setIsModalOpen(false)} aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-gray-700 font-medium mb-1">
-                        Progression (0 à 1)
-                      </label>
-                      <input
-                          type="number"
-                          value={newProgress}
-                          onChange={(e) => setNewProgress(Number(e.target.value))}
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          className="w-full border border-gray-300 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
+                    <form onSubmit={handleAddTask}>
+                      <div className="modal-body">
+                        <div className="form-group">
+                          <label>Nom de la tâche</label>
+                          <input
+                              type="text"
+                              className="form-control"
+                              value={newTaskName}
+                              onChange={(e) => setNewTaskName(e.target.value)}
+                              placeholder="Ex: Conception UI"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Date de début</label>
+                          <DatePicker
+                              selected={newStartDate}
+                              onChange={(date: Date | null) => setNewStartDate(date)}
+                              showTimeSelect
+                              timeFormat="HH:mm"
+                              timeIntervals={15}
+                              dateFormat="yyyy-MM-dd HH:mm"
+                              placeholderText="Sélectionnez une date"
+                              className="form-control"
+                          />
+                        </div>
+                        <div className="form-row">
+                          <div className="form-group col-md-6">
+                            <label>Durée (en jours)</label>
+                            <input
+                                type="number"
+                                className="form-control"
+                                value={newDuration}
+                                onChange={(e) => setNewDuration(Number(e.target.value))}
+                                min="1"
+                            />
+                          </div>
+                          <div className="form-group col-md-6">
+                            <label>Progression (0 à 1)</label>
+                            <input
+                                type="number"
+                                className="form-control"
+                                value={newProgress}
+                                onChange={(e) => setNewProgress(Number(e.target.value))}
+                                min="0"
+                                max="1"
+                                step="0.1"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="modal-footer">
+                        <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
+                          Annuler
+                        </button>
+                        <button type="submit" className="btn btn-primary">
+                          Valider
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                  <div className="flex justify-end space-x-4 pt-4">
-                    <button
-                        type="button"
-                        onClick={() => setIsModalOpen(false)}
-                        className="px-6 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition duration-200"
-                    >
-                      Annuler
-                    </button>
-                    <button
-                        type="submit"
-                        className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-200"
-                    >
-                      Valider
-                    </button>
-                  </div>
-                </form>
+                </div>
               </div>
-            </div>
+            </>
         )}
       </div>
   );

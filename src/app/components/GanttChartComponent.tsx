@@ -1,3 +1,4 @@
+// src/app/components/GanttChartComponent.tsx
 "use client";
 import React, { useEffect, useRef } from 'react';
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
@@ -15,15 +16,28 @@ export interface GanttChartProps {
         }>;
         links: Array<any>;
     };
+    onTaskUpdate?: (updatedTask: any) => void;
 }
 
-const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData }) => {
+const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdate }) => {
     const ganttContainer = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        // Configure le format de date attendu par Gantt
+        (gantt as any).config.date_format = "%Y-%m-%d %H:%i";
+
         if (ganttContainer.current) {
             gantt.init(ganttContainer.current);
         }
+
+        // Attacher l'événement de mise à jour d'une tâche
+        (gantt as any).attachEvent("onAfterTaskUpdate", (id: any, item: any) => {
+            if (onTaskUpdate) {
+                onTaskUpdate(item);
+            }
+            return true;
+        });
+
         return () => {
             gantt.clearAll();
         };
