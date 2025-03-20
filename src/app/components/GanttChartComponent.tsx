@@ -3,11 +3,21 @@ import React, { useEffect, useRef } from 'react';
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
 import gantt from 'dhtmlx-gantt';
 
-interface GanttChartProps {
-    tasksData: any;
+export interface GanttChartProps {
+    tasksData: {
+        data: Array<{
+            id: string;
+            text: string;
+            start_date: string;
+            duration: number;
+            progress: number;
+            open: boolean;
+        }>;
+        links: Array<any>;
+    };
 }
 
-const GanttChart: React.FC<GanttChartProps> = ({ tasksData }) => {
+const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData }) => {
     const ganttContainer = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -29,4 +39,4 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasksData }) => {
     return <div ref={ganttContainer} style={{ width: '100%', height: '600px' }} />;
 };
 
-export default GanttChart;
+export default GanttChartComponent;
