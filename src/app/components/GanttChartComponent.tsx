@@ -9,7 +9,9 @@ export interface GanttChartProps {
         data: Array<{
             id: string;
             text: string;
+            specialty: string;
             start_date: string;
+            end_date: string;
             duration: number;
             progress: number;
             open: boolean;
@@ -23,15 +25,38 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
     const ganttContainer = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Configure le format de date attendu par Gantt
-        (gantt as any).config.date_format = "%Y-%m-%d %H:%i";
+        const ganttAny = gantt as any;
+        // Configuration du format de date attendu par Gantt
+        ganttAny.config.date_format = "%Y-%m-%d %H:%i";
+
+        // Configuration des colonnes, incluant la spécialité
+        ganttAny.config.columns = [
+            { name: "text", label: "Task Name", tree: true, width: '*' },
+            { name: "specialty", label: "Spécialité", align: "center", width: 100 },
+            { name: "start_date", label: "Start Date", align: "center", width: 100 },
+            { name: "duration", label: "Duration", align: "center", width: 60 },
+        ];
+
+        // Template pour définir la classe CSS de la tâche en fonction de la progression
+        ganttAny.templates.task_class = function(start: any, end: any, task: any) {
+            const p = task.progress * 100;
+            if (p < 26) {
+                return "red-task";
+            } else if (p < 51) {
+                return "orange-task";
+            } else if (p < 75) {
+                return "yellow-task";
+            } else {
+                return "green-task";
+            }
+        };
 
         if (ganttContainer.current) {
-            gantt.init(ganttContainer.current);
+            ganttAny.init(ganttContainer.current);
         }
 
-        // Attacher l'événement de mise à jour d'une tâche
-        (gantt as any).attachEvent("onAfterTaskUpdate", (id: any, item: any) => {
+        // Attachement de l'événement pour notifier les mises à jour de tâche
+        ganttAny.attachEvent("onAfterTaskUpdate", (id: any, item: any) => {
             if (onTaskUpdate) {
                 onTaskUpdate(item);
             }
@@ -39,14 +64,14 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
         });
 
         return () => {
-            gantt.clearAll();
+            ganttAny.clearAll();
         };
     }, []);
 
     useEffect(() => {
         if (tasksData) {
-            gantt.clearAll();
-            gantt.parse(tasksData);
+            (gantt as any).clearAll();
+            (gantt as any).parse(tasksData);
         }
     }, [tasksData]);
 
