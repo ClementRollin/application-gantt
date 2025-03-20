@@ -2,8 +2,8 @@ import './globals.css';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Mon Gantt Trello',
-    description: 'Application Next.js + Trello + Gantt',
+    title: 'Application de Gantt',
+    description: 'Ajoutez vos tâches et visualisez un diagramme de Gantt complet.',
 };
 
 export default function RootLayout({
@@ -13,9 +13,7 @@ export default function RootLayout({
 }) {
     return (
         <html lang="fr">
-        <body>
-        {children}
-        </body>
+        <body>{children}</body>
         </html>
     );
 }
