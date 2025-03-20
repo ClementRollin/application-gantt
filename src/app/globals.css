@@ -65,16 +65,16 @@ h1, h2, h3 {
 }
 
 /* Couleurs de tâches en fonction de la progression */
-.red-task .gantt_task_bar {
+.red-task {
     background-color: #e53e3e !important;
 }
-.orange-task .gantt_task_bar {
+.orange-task {
     background-color: #ed8936 !important;
 }
-.yellow-task .gantt_task_bar {
+.yellow-task {
     background-color: #ecc94b !important;
 }
-.green-task .gantt_task_bar {
+.green-task {
     background-color: #48bb78 !important;
 }
 
