@@ -1,3 +1,4 @@
+// src/app/components/GanttChartComponent.tsx
 "use client";
 import React, { useEffect, useRef } from 'react';
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
