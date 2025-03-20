@@ -50,6 +50,10 @@ h1, h2, h3 {
     width: 100%;
 }
 
+.modal.show {
+    z-index: 1100;
+}
+
 .fullpage-overlay {
     position: fixed;
     top: 0;
@@ -60,8 +64,18 @@ h1, h2, h3 {
     z-index: 1050;
 }
 
-.modal.show {
-    z-index: 1100;
+/* Couleurs de tâches en fonction de la progression */
+.red-task .gantt_task_bar {
+    background-color: #e53e3e !important;
+}
+.orange-task .gantt_task_bar {
+    background-color: #ed8936 !important;
+}
+.yellow-task .gantt_task_bar {
+    background-color: #ecc94b !important;
+}
+.green-task .gantt_task_bar {
+    background-color: #48bb78 !important;
 }
 
 /* Footer */

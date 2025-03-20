@@ -4,16 +4,18 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 
-// Importation dynamique du composant Gantt (uniquement côté client)
+// Import dynamique du composant Gantt (uniquement côté client)
 const GanttChart = dynamic(() => import('./components/GanttChartComponent'), {
   ssr: false,
 });
 
-// Interface d'une tâche
+// Interface d'une tâche (avec "specialty" et "end_date")
 interface Task {
   id: string;
   text: string;
+  specialty: string;
   start_date: string; // Format "YYYY-MM-DD HH:mm"
+  end_date: string;   // Format "YYYY-MM-DD HH:mm"
   duration: number;
   progress: number;
   open: boolean;
@@ -25,11 +27,16 @@ const formatDate = (date: Date): string => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
-// Fonction qui convertit une valeur en chaîne de date (si c'est un objet Date)
+// Convertit une valeur en chaîne de date (si c'est un objet Date ou une chaîne ISO)
 const convertToStringDate = (d: any): string => {
   if (d instanceof Date) {
     return formatDate(d);
   } else if (typeof d === "string") {
+    // Si la chaîne contient un "T", on la considère comme ISO et on la reformate.
+    if (d.indexOf("T") !== -1) {
+      const dateObj = new Date(d);
+      return formatDate(dateObj);
+    }
     return d;
   }
   return "";
@@ -41,6 +48,7 @@ export default function HomePage() {
 
   // Champs du formulaire pour ajouter une tâche
   const [newTaskName, setNewTaskName] = useState<string>('');
+  const [newSpecialty, setNewSpecialty] = useState<string>('UI/UX');
   const [newStartDate, setNewStartDate] = useState<Date | null>(null);
   const [newDuration, setNewDuration] = useState<number>(1);
   const [newProgress, setNewProgress] = useState<number>(0);
@@ -51,7 +59,8 @@ export default function HomePage() {
     if (storedTasks) {
       const parsed = JSON.parse(storedTasks).map((t: any) => ({
         ...t,
-        start_date: convertToStringDate(t.start_date)
+        start_date: convertToStringDate(t.start_date),
+        end_date: convertToStringDate(t.end_date)
       }));
       setTasks(parsed);
     }
@@ -68,13 +77,20 @@ export default function HomePage() {
       alert('Veuillez remplir tous les champs.');
       return;
     }
-    const formattedDate = formatDate(newStartDate);
-    console.log("Nouvelle tâche, date formatée :", formattedDate);
+    // Calculer la date de début formatée
+    const formattedStart = formatDate(newStartDate);
+    // Calculer la date de fin en ajoutant la durée (en jours) à la date de début
+    const endDateObj = new Date(newStartDate);
+    endDateObj.setDate(endDateObj.getDate() + newDuration);
+    const formattedEnd = formatDate(endDateObj);
+    console.log("Nouvelle tâche, start_date :", formattedStart, "end_date :", formattedEnd);
 
     const newTask: Task = {
       id: Date.now().toString(),
       text: newTaskName,
-      start_date: formattedDate,
+      specialty: newSpecialty,
+      start_date: formattedStart,
+      end_date: formattedEnd,
       duration: newDuration,
       progress: newProgress,
       open: true,
@@ -83,27 +99,30 @@ export default function HomePage() {
     setTasks(prev => [...prev, newTask]);
     // Réinitialiser le formulaire
     setNewTaskName('');
+    setNewSpecialty('UI/UX');
     setNewStartDate(null);
     setNewDuration(1);
     setNewProgress(0);
     setIsModalOpen(false);
   };
 
+  const handleDeleteTask = (id: string) => {
+    setTasks(prev => prev.filter(task => task.id !== id));
+  };
+
   // Callback pour mettre à jour une tâche depuis le Gantt
   const handleTaskUpdate = (updatedTask: any) => {
-    // Convertir systématiquement start_date en chaîne si nécessaire
     if (updatedTask.start_date) {
       updatedTask.start_date = convertToStringDate(updatedTask.start_date);
+    }
+    if (updatedTask.end_date) {
+      updatedTask.end_date = convertToStringDate(updatedTask.end_date);
     }
     setTasks(prevTasks =>
         prevTasks.map(task =>
             task.id === updatedTask.id ? { ...task, ...updatedTask } : task
         )
     );
-  };
-
-  const handleDeleteTask = (id: string) => {
-    setTasks(prev => prev.filter(task => task.id !== id));
   };
 
   const tasksData = {
@@ -122,7 +141,7 @@ export default function HomePage() {
         </header>
 
         {/* Contenu principal */}
-        <main className="container flex-grow-1 py-4">
+        <main className="container flex-grow-1 py-4 min-vw-75">
           <div className="d-flex justify-content-end mb-3">
             <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
               Ajouter une tâche
@@ -142,7 +161,7 @@ export default function HomePage() {
                           <div>
                             <h5 className="mb-1">{task.text}</h5>
                             <small>
-                              Début : {convertToStringDate(task.start_date)} | Durée : {task.duration} jour(s) | Progression : {Math.round(task.progress * 100)}%
+                              Spécialité : {task.specialty} | Début : {convertToStringDate(task.start_date)} | Durée : {task.duration} jour(s) | Progression : {Math.round(task.progress * 100)}%
                             </small>
                           </div>
                           <button
@@ -159,7 +178,7 @@ export default function HomePage() {
             </div>
           </section>
 
-          <section className="card mb-4">
+          <section className="card">
             <div className="card-body">
               <h2 className="card-title">Diagramme de Gantt</h2>
               {tasks.length === 0 ? (
@@ -185,15 +204,15 @@ export default function HomePage() {
               <div className="modal show fade d-block" tabIndex={-1} role="dialog">
                 <div className="modal-dialog" role="document">
                   <div className="modal-content">
-                    <div className="modal-header d-flex justify-content-between">
+                    <div className="modal-header d-flex justify-content-between align-items-center">
                       <h5 className="modal-title">Ajouter une tâche</h5>
                       <button type="button" className="close" onClick={() => setIsModalOpen(false)} aria-label="Close">
                         <span aria-hidden="true">&times;</span>
                       </button>
                     </div>
                     <form onSubmit={handleAddTask}>
-                      <div className="modal-body">
-                        <div className="form-group mb-3">
+                      <div className="modal-body p-4">
+                        <div className="form-group mb-4">
                           <label>Nom de la tâche</label>
                           <input
                               type="text"
@@ -203,7 +222,21 @@ export default function HomePage() {
                               placeholder="Ex: Conception UI"
                           />
                         </div>
-                        <div className="form-group d-flex flex-column mb-3">
+                        <div className="form-group mb-4">
+                          <label>Spécialité</label>
+                          <select
+                              className="form-control"
+                              value={newSpecialty}
+                              onChange={(e) => setNewSpecialty(e.target.value)}
+                          >
+                            <option value="UI/UX">UI/UX</option>
+                            <option value="Dev front">Dev front</option>
+                            <option value="Dev back">Dev back</option>
+                            <option value="Marketing">Marketing</option>
+                            <option value="DA">DA</option>
+                          </select>
+                        </div>
+                        <div className="form-group mb-4 d-flex flex-column">
                           <label>Date de début</label>
                           <DatePicker
                               selected={newStartDate}
@@ -216,9 +249,9 @@ export default function HomePage() {
                               className="form-control"
                           />
                         </div>
-                        <div className="form-row mb-3">
-                          <div className="form-group col-md-6 mb-3">
-                            <label>Durée (en jours)</label>
+                        <div className="form-row mb-4 d-flex justify-content-between">
+                          <div className="form-group col-md-6 w-25">
+                            <label>Durée (Jours)</label>
                             <input
                                 type="number"
                                 className="form-control"
@@ -227,7 +260,7 @@ export default function HomePage() {
                                 min="1"
                             />
                           </div>
-                          <div className="form-group col-md-6">
+                          <div className="form-group col-md-6 mb-4">
                             <label>Progression (0 à 1)</label>
                             <input
                                 type="number"
