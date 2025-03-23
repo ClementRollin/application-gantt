@@ -18,9 +18,10 @@ export interface GanttChartProps {
         links: Array<any>;
     };
     onTaskUpdate?: (updatedTask: any) => void;
+    onLinkChange?: (newLinks: any[]) => void;
 }
 
-const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdate }) => {
+const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdate, onLinkChange }) => {
     const ganttContainer = useRef<HTMLDivElement>(null);
 
     const parseDate = (dateInput: any): Date => {
@@ -83,10 +84,32 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
             return true;
         });
 
+        ganttAny.attachEvent("onAfterLinkAdd", (id: any, link: any) => {
+            if (onLinkChange) {
+                const allLinks = ganttAny.getLinks();
+                onLinkChange(allLinks);
+            }
+            return true;
+        });
+        ganttAny.attachEvent("onAfterLinkDelete", (id: any, link: any) => {
+            if (onLinkChange) {
+                const allLinks = ganttAny.getLinks();
+                onLinkChange(allLinks);
+            }
+            return true;
+        });
+        ganttAny.attachEvent("onAfterLinkUpdate", (id: any, link: any) => {
+            if (onLinkChange) {
+                const allLinks = ganttAny.getLinks();
+                onLinkChange(allLinks);
+            }
+            return true;
+        });
+
         return () => {
             ganttAny.clearAll();
         };
-    }, [onTaskUpdate]);
+    }, [onTaskUpdate, onLinkChange]);
 
     useEffect(() => {
         if (tasksData) {

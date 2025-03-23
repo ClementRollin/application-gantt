@@ -1,10 +1,10 @@
 "use client";
-import dynamic from 'next/dynamic';
-import React, { useState, useEffect, FormEvent } from 'react';
-import DatePicker from 'react-datepicker';
+import dynamic from "next/dynamic";
+import React, { useState, useEffect, FormEvent, useRef } from "react";
+import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
-const GanttChart = dynamic(() => import('./components/GanttChartComponent'), {
+const GanttChart = dynamic(() => import("./components/GanttChartComponent"), {
   ssr: false,
 });
 
@@ -22,58 +22,111 @@ interface Task {
   open: boolean;
 }
 
+// Interface d'un lien (dépendance) enrichi d'un écart initial en millisecondes
+interface Link {
+  id: string;
+  source: string;
+  target: string;
+  type: "0" | "1" | "2" | "3"; // 0: Finish-to-Start, 1: Start-to-Start, 2: Finish-to-Finish, 3: Start-to-Finish
+  initialGap?: number; // gap en ms
+}
+
 const formatDateTime = (date: Date): string => {
-  const pad = (n: number) => (n < 10 ? '0' + n : n);
+  const pad = (n: number) => (n < 10 ? "0" + n : n);
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`;
 };
 
 const formatDateOnly = (dateInput: any): string => {
-  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-  const pad = (n: number) => (n < 10 ? '0' + n : n);
+  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  const pad = (n: number) => (n < 10 ? "0" + n : n);
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
 export default function HomePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [links, setLinks] = useState<Link[]>([]);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
-  const [newTaskName, setNewTaskName] = useState<string>('');
+  // États pour création d'une tâche
+  const [newTaskName, setNewTaskName] = useState<string>("");
   const [newSpecialty, setNewSpecialty] = useState<string[]>(["UI/UX"]);
   const [newStartDate, setNewStartDate] = useState<Date | null>(null);
   const [newEndDate, setNewEndDate] = useState<Date | null>(null);
   const [newProgress, setNewProgress] = useState<number>(0);
 
+  // États pour modification d'une tâche
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [editTaskName, setEditTaskName] = useState<string>('');
+  const [editTaskName, setEditTaskName] = useState<string>("");
   const [editSpecialty, setEditSpecialty] = useState<string[]>([]);
   const [editStartDate, setEditStartDate] = useState<Date | null>(null);
   const [editEndDate, setEditEndDate] = useState<Date | null>(null);
   const [editProgress, setEditProgress] = useState<number>(0);
 
+  // Références pour éviter les doubles mises à jour
+  const confirmedTaskRef = useRef<string | null>(null);
+  const isUpdatingRef = useRef<boolean>(false);
+  const skipNextGanttUpdateRef = useRef<boolean>(false);
+
+  // Chargement initial depuis localStorage
   useEffect(() => {
-    const storedTasks = localStorage.getItem('tasks');
-    if (storedTasks) {
-      const parsed = JSON.parse(storedTasks).map((t: any) => ({
+    const storedData = localStorage.getItem("ganttData");
+    if (storedData) {
+      const { tasks: storedTasks, links: storedLinks } = JSON.parse(storedData);
+      const parsedTasks = storedTasks.map((t: any) => ({
         ...t,
         start_date: formatDateTime(new Date(t.start_date)),
         end_date: formatDateTime(new Date(t.end_date)),
       }));
-      setTasks(parsed);
+      setTasks(parsedTasks);
+      setLinks(storedLinks || []);
     }
   }, []);
 
+  // Sauvegarde dans localStorage dès que tasks ou links changent
   useEffect(() => {
-    localStorage.setItem('tasks', JSON.stringify(tasks));
-  }, [tasks]);
+    localStorage.setItem("ganttData", JSON.stringify({ tasks, links }));
+  }, [tasks, links]);
+
+  // Lors d'un changement de lien, on enrichit chaque lien avec son écart initial si ce n'est pas déjà fait
+  const enrichLinksWithGap = (linksArray: Link[]): Link[] => {
+    return linksArray.map(link => {
+      if (link.initialGap !== undefined) return link;
+      const predTask = tasks.find(t => t.id === link.source);
+      const depTask = tasks.find(t => t.id === link.target);
+      if (!predTask || !depTask) return link;
+      const predStart = new Date(predTask.start_date);
+      const predEnd = new Date(predTask.end_date);
+      const depStart = new Date(depTask.start_date);
+      const depEnd = new Date(depTask.end_date);
+      let gap: number = 0;
+      switch(link.type) {
+        case "0":
+          gap = depStart.getTime() - predEnd.getTime();
+          break;
+        case "1":
+          gap = depStart.getTime() - predStart.getTime();
+          break;
+        case "2":
+          gap = depEnd.getTime() - predEnd.getTime();
+          break;
+        case "3":
+          gap = depEnd.getTime() - predStart.getTime();
+          break;
+        default:
+          gap = 0;
+      }
+      return { ...link, initialGap: gap };
+    });
+  };
 
   const handleAddTask = (e: FormEvent) => {
     e.preventDefault();
     if (!newTaskName || !newStartDate || !newEndDate) {
-      alert('Veuillez remplir tous les champs, y compris la date et l\'heure de fin.');
+      alert("Veuillez remplir tous les champs, y compris la date et l'heure de fin.");
       return;
     }
     if (newEndDate <= newStartDate) {
-      alert('La date de fin doit être postérieure à la date de début.');
+      alert("La date de fin doit être postérieure à la date de début.");
       return;
     }
     const startDateTime = formatDateTime(newStartDate);
@@ -92,7 +145,7 @@ export default function HomePage() {
     };
 
     setTasks(prev => [...prev, newTask]);
-    setNewTaskName('');
+    setNewTaskName("");
     setNewSpecialty(["UI/UX"]);
     setNewStartDate(null);
     setNewEndDate(null);
@@ -102,6 +155,7 @@ export default function HomePage() {
 
   const handleDeleteTask = (id: string) => {
     setTasks(prev => prev.filter(task => task.id !== id));
+    setLinks(prev => prev.filter(link => link.source !== id && link.target !== id));
   };
 
   const handleEditClick = (task: Task) => {
@@ -113,16 +167,81 @@ export default function HomePage() {
     setEditProgress(task.progress);
   };
 
+  // Propagation des changements en utilisant le gap initial stocké dans le lien
+  const propagateChanges = (existingTask: Task, updatedTask: Task) => {
+    const newPredStart = new Date(updatedTask.start_date);
+    const newPredEnd = new Date(updatedTask.end_date);
+
+    setTasks(prev =>
+        prev.map(task => {
+          const link = links.find(l => l.target === task.id && l.source === existingTask.id);
+          if (link) {
+            const oldDepStart = new Date(task.start_date);
+            const oldDepEnd = new Date(task.end_date);
+            const durationMs = oldDepEnd.getTime() - oldDepStart.getTime();
+            let newDepStart: Date;
+            let newDepEnd: Date;
+            let gap: number;
+            switch (link.type) {
+              case "0": {
+                gap = link.initialGap !== undefined
+                    ? link.initialGap
+                    : oldDepStart.getTime() - new Date(existingTask.end_date).getTime();
+                newDepStart = new Date(newPredEnd.getTime() + gap);
+                newDepEnd = new Date(newDepStart.getTime() + durationMs);
+                break;
+              }
+              case "1": {
+                gap = link.initialGap !== undefined
+                    ? link.initialGap
+                    : oldDepStart.getTime() - new Date(existingTask.start_date).getTime();
+                newDepStart = new Date(newPredStart.getTime() + gap);
+                newDepEnd = new Date(newDepStart.getTime() + durationMs);
+                break;
+              }
+              case "2": {
+                gap = link.initialGap !== undefined
+                    ? link.initialGap
+                    : oldDepEnd.getTime() - new Date(existingTask.end_date).getTime();
+                newDepEnd = new Date(newPredEnd.getTime() + gap);
+                newDepStart = new Date(newDepEnd.getTime() - durationMs);
+                break;
+              }
+              case "3": {
+                gap = link.initialGap !== undefined
+                    ? link.initialGap
+                    : oldDepEnd.getTime() - new Date(existingTask.start_date).getTime();
+                newDepEnd = new Date(newPredStart.getTime() + gap);
+                newDepStart = new Date(newDepEnd.getTime() - durationMs);
+                break;
+              }
+              default:
+                return task;
+            }
+            return {
+              ...task,
+              start_date: formatDateTime(newDepStart),
+              end_date: formatDateTime(newDepEnd),
+              duration: durationMs / (1000 * 60 * 60),
+            };
+          }
+          return task;
+        })
+    );
+  };
+
   const handleEditTask = (e: FormEvent) => {
     e.preventDefault();
     if (!editingTask || !editStartDate || !editEndDate) {
-      alert('Veuillez remplir tous les champs, y compris la date et l\'heure de fin.');
+      alert("Veuillez remplir tous les champs, y compris la date et l'heure de fin.");
       return;
     }
     if (editEndDate <= editStartDate) {
-      alert('La date de fin doit être postérieure à la date de début.');
+      alert("La date de fin doit être postérieure à la date de début.");
       return;
     }
+    isUpdatingRef.current = true;
+
     const startDateTime = formatDateTime(editStartDate);
     const endDateTime = formatDateTime(editEndDate);
     const computedDuration = (editEndDate.getTime() - editStartDate.getTime()) / (1000 * 60 * 60);
@@ -137,16 +256,111 @@ export default function HomePage() {
       progress: editProgress,
     };
 
-    setTasks(prev => prev.map(task => task.id === editingTask.id ? updatedTask : task));
+    const existingTask = editingTask;
+    const dependentLinks = links.filter(link => link.source === existingTask.id);
+
+    if (
+        (updatedTask.start_date !== existingTask.start_date ||
+            updatedTask.end_date !== existingTask.end_date) &&
+        dependentLinks.length > 0
+    ) {
+      propagateChanges(existingTask, updatedTask);
+    }
+    setTasks(prev =>
+        prev.map(task =>
+            task.id === updatedTask.id ? { ...task, ...updatedTask } : task
+        )
+    );
+    skipNextGanttUpdateRef.current = true;
     setEditingTask(null);
+    isUpdatingRef.current = false;
   };
 
-  const sortedTasks = [...tasks].sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
-
-  const tasksData = {
-    data: sortedTasks,
-    links: [],
+  const handleGanttTaskUpdate = (updatedTask: any) => {
+    if (skipNextGanttUpdateRef.current) {
+      skipNextGanttUpdateRef.current = false;
+      return;
+    }
+    if (isUpdatingRef.current) return;
+    const existingTask = tasks.find(task => task.id === updatedTask.id);
+    if (!existingTask) return;
+    const dependentLinks = links.filter(link => link.source === updatedTask.id);
+    if (
+        (updatedTask.start_date !== existingTask.start_date ||
+            updatedTask.end_date !== existingTask.end_date) &&
+        dependentLinks.length > 0
+    ) {
+      const newPredStart = new Date(updatedTask.start_date);
+      const newPredEnd = new Date(updatedTask.end_date);
+      setTasks(prev =>
+          prev.map(task => {
+            const link = dependentLinks.find(l => l.target === task.id);
+            if (link) {
+              const oldDepStart = new Date(task.start_date);
+              const oldDepEnd = new Date(task.end_date);
+              const durationMs = oldDepEnd.getTime() - oldDepStart.getTime();
+              let newDepStart: Date;
+              let newDepEnd: Date;
+              let gap: number;
+              switch (link.type) {
+                case "0": {
+                  gap = link.initialGap !== undefined
+                      ? link.initialGap
+                      : oldDepStart.getTime() - new Date(existingTask.end_date).getTime();
+                  newDepStart = new Date(newPredEnd.getTime() + gap);
+                  newDepEnd = new Date(newDepStart.getTime() + durationMs);
+                  break;
+                }
+                case "1": {
+                  gap = link.initialGap !== undefined
+                      ? link.initialGap
+                      : oldDepStart.getTime() - new Date(existingTask.start_date).getTime();
+                  newDepStart = new Date(newPredStart.getTime() + gap);
+                  newDepEnd = new Date(newDepStart.getTime() + durationMs);
+                  break;
+                }
+                case "2": {
+                  gap = link.initialGap !== undefined
+                      ? link.initialGap
+                      : oldDepEnd.getTime() - new Date(existingTask.end_date).getTime();
+                  newDepEnd = new Date(newPredEnd.getTime() + gap);
+                  newDepStart = new Date(newDepEnd.getTime() - durationMs);
+                  break;
+                }
+                case "3": {
+                  gap = link.initialGap !== undefined
+                      ? link.initialGap
+                      : oldDepEnd.getTime() - new Date(existingTask.start_date).getTime();
+                  newDepEnd = new Date(newPredStart.getTime() + gap);
+                  newDepStart = new Date(newDepEnd.getTime() - durationMs);
+                  break;
+                }
+                default:
+                  return task;
+              }
+              return {
+                ...task,
+                start_date: formatDateTime(newDepStart),
+                end_date: formatDateTime(newDepEnd),
+                duration: durationMs / (1000 * 60 * 60),
+              };
+            }
+            return task;
+          })
+      );
+    }
+    setTasks(prev =>
+        prev.map(task =>
+            task.id === updatedTask.id ? { ...task, ...updatedTask } : task
+        )
+    );
   };
+
+  const sortedTasks = [...tasks].sort(
+      (a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+  );
+
+  const tasksData = { data: sortedTasks, links: links };
 
   const handleSpecialtyChange = (value: string, checked: boolean, isEdit = false) => {
     if (isEdit) {
@@ -193,9 +407,12 @@ export default function HomePage() {
                             <div>
                               <h5 className="mb-1">{task.text}</h5>
                               <small>
-                                Spécialités : {task.specialty.join(", ")} | Début : {formatDateOnly(task.start_date)} {new Date(task.start_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} | Fin : {formatDateOnly(task.end_date)} {new Date(task.end_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} | Durée : {
-                                ((new Date(task.end_date).getTime() - new Date(task.start_date).getTime()) / (1000 * 60 * 60)).toFixed(2)
-                              } heure(s) | Progression : {Math.round(task.progress * 100)}%
+                                Spécialités : {task.specialty.join(", ")} | Début : {formatDateOnly(task.start_date)}{" "}
+                                {new Date(task.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | Fin :{" "}
+                                {formatDateOnly(task.end_date)}{" "}
+                                {new Date(task.end_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | Durée :{" "}
+                                {((new Date(task.end_date).getTime() - new Date(task.start_date).getTime()) / (1000 * 60 * 60)).toFixed(2)}{" "}
+                                heure(s) | Progression : {Math.round(task.progress * 100)}%
                               </small>
                             </div>
                             <div>
@@ -220,9 +437,11 @@ export default function HomePage() {
               {sortedTasks.length === 0 ? (
                   <p>Aucune tâche ajoutée. Cliquez sur "Ajouter une tâche" pour démarrer.</p>
               ) : (
-                  <GanttChart tasksData={tasksData} onTaskUpdate={(updatedTask) => {
-                    setTasks(prev => prev.map(task => task.id === updatedTask.id ? { ...task, ...updatedTask } : task));
-                  }} />
+                  <GanttChart
+                      tasksData={tasksData}
+                      onTaskUpdate={handleGanttTaskUpdate}
+                      onLinkChange={(newLinks) => setLinks(enrichLinksWithGap(newLinks))}
+                  />
               )}
             </div>
           </section>
