@@ -1,4 +1,3 @@
-// src/app/components/GanttChartComponent.tsx
 "use client";
 import React, { useEffect, useRef } from 'react';
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
@@ -9,7 +8,7 @@ export interface GanttChartProps {
         data: Array<{
             id: string;
             text: string;
-            specialty: string;
+            specialty: string[];
             start_date: string;
             end_date: string;
             duration: number;
@@ -24,20 +23,42 @@ export interface GanttChartProps {
 const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdate }) => {
     const ganttContainer = useRef<HTMLDivElement>(null);
 
+    const parseDate = (dateInput: any): Date => {
+        return dateInput instanceof Date ? dateInput : new Date(dateInput);
+    };
+
     useEffect(() => {
         const ganttAny = gantt as any;
-        // Configuration du format de date attendu par Gantt
-        ganttAny.config.date_format = "%Y-%m-%d %H:%i";
+        ganttAny.config.date_format = "%Y-%m-%dT%H:%i:%s";
+        ganttAny.config.xml_date = "%Y-%m-%dT%H:%i:%s";
+        ganttAny.config.duration_unit = "hour";
+        ganttAny.config.duration_step = 0.1;
+        ganttAny.config.round_durations = false;
 
-        // Configuration des colonnes, incluant la spécialité
         ganttAny.config.columns = [
-            { name: "text", label: "Task Name", tree: true, width: '*' },
-            { name: "specialty", label: "Spécialité", align: "center", width: 100 },
-            { name: "start_date", label: "Start Date", align: "center", width: 100 },
-            { name: "duration", label: "Duration", align: "center", width: 60 },
+            { name: "text", label: "Nom de la tâche", tree: true, width: 150 },
+            {
+                name: "specialty",
+                label: "Spécialités",
+                align: "left",
+                width: 150,
+                template: function (task: any) {
+                    return Array.isArray(task.specialty) ? task.specialty.join(", ") : task.specialty;
+                }
+            },
+            { name: "start_date", label: "Date de début", align: "left", width: 130 },
+            {
+                name: "duration",
+                label: "Durée",
+                align: "left",
+                width: 80,
+                template: function (task: any) {
+                    const durationInHours = (task.end_date - task.start_date) / (1000 * 60 * 60);
+                    return durationInHours.toFixed(2) + " h";
+                }
+            }
         ];
 
-        // Template pour définir la classe CSS de la tâche en fonction de la progression
         ganttAny.templates.task_class = function(start: any, end: any, task: any) {
             const p = task.progress * 100;
             if (p < 26) {
@@ -55,7 +76,6 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
             ganttAny.init(ganttContainer.current);
         }
 
-        // Attachement de l'événement pour notifier les mises à jour de tâche
         ganttAny.attachEvent("onAfterTaskUpdate", (id: any, item: any) => {
             if (onTaskUpdate) {
                 onTaskUpdate(item);
@@ -66,12 +86,20 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
         return () => {
             ganttAny.clearAll();
         };
-    }, []);
+    }, [onTaskUpdate]);
 
     useEffect(() => {
         if (tasksData) {
+            const transformedData = {
+                data: tasksData.data.map(task => ({
+                    ...task,
+                    start_date: parseDate(task.start_date),
+                    end_date: parseDate(task.end_date)
+                })),
+                links: tasksData.links,
+            };
             (gantt as any).clearAll();
-            (gantt as any).parse(tasksData);
+            (gantt as any).parse(transformedData, "json");
         }
     }, [tasksData]);
 
