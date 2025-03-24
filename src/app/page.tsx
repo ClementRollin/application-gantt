@@ -9,13 +9,14 @@ import Link from "next/link";
 import { Button, Container, Row, Col } from "react-bootstrap";
 import GanttWrapper from "./GanttWrapper";
 
+// Chargement dynamique du composant Gantt
 const GanttChart = dynamic(() => import("./components/GanttChartComponent"), {
-    ssr: false
+    ssr: false,
 });
 
 const specialtyOptions = ["UI/UX", "Dev front", "Dev back", "Marketing", "DA", "tout le groupe"];
 
-interface Task {
+export interface Task {
     id: string;
     text: string;
     specialty: string[];
@@ -26,12 +27,12 @@ interface Task {
     open: boolean;
 }
 
-interface Link {
+export interface LinkType {
     id: string;
     source: string;
     target: string;
     type: "0" | "1" | "2" | "3";
-    initialGap?: number;
+    // On ne stocke plus ici initialGap, car on va simplement calculer le delta.
 }
 
 const formatDateTime = (date: Date): string => {
@@ -47,11 +48,89 @@ const formatDateOnly = (dateInput: any): string => {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
+/**
+ * Calcule le delta entre la valeur actuelle de la date de référence du parent et sa valeur précédente.
+ * Pour les types "0" et "2", la date de référence est la date de fin.
+ * Pour les types "1" et "3", la date de référence est la date de début.
+ */
+const getParentDelta = (oldParent: Task, newParent: Task, linkType: LinkType["type"]) => {
+    let refOld: number, refNew: number;
+    if (linkType === "0" || linkType === "2") {
+        refOld = new Date(oldParent.end_date).getTime();
+        refNew = new Date(newParent.end_date).getTime();
+    } else if (linkType === "1" || linkType === "3") {
+        refOld = new Date(oldParent.start_date).getTime();
+        refNew = new Date(newParent.start_date).getTime();
+    } else {
+        refOld = new Date(oldParent.end_date).getTime();
+        refNew = new Date(newParent.end_date).getTime();
+    }
+    return refNew - refOld;
+};
+
+/**
+ * Propagation des changements de la tâche parente vers ses tâches dépendantes.
+ * Pour chaque dépendance, on calcule le delta (différence) entre la nouvelle et l'ancienne date de référence du parent,
+ * et on l'ajoute aux dates de la tâche dépendante.
+ */
+const propagateChanges = (
+    oldParent: Task,
+    newParent: Task,
+    tasks: Task[],
+    links: LinkType[],
+    updateGantt: (newTasks: Task[], newLinks: LinkType[]) => void,
+    setTasks: (newTasks: Task[]) => void
+) => {
+    const updatedTasks = tasks.map(task => {
+        const link = links.find(l => l.source === oldParent.id && l.target === task.id);
+        if (link) {
+            // Calculer le delta selon le type de dépendance
+            const delta = getParentDelta(oldParent, newParent, link.type);
+            const newChildStart = new Date(new Date(task.start_date).getTime() + delta);
+            const newChildEnd = new Date(new Date(task.end_date).getTime() + delta);
+            return {
+                ...task,
+                start_date: formatDateTime(newChildStart),
+                end_date: formatDateTime(newChildEnd)
+            };
+        }
+        return task;
+    });
+    setTasks(updatedTasks);
+    updateGantt(updatedTasks, links);
+};
+
+/**
+ * Mise à jour de la tâche via le Gantt.
+ * Si la tâche mise à jour est un parent, on propage le décalage à ses tâches dépendantes.
+ */
+const handleGanttTaskUpdate = (
+    updatedTask: any,
+    tasks: Task[],
+    links: LinkType[],
+    updateGantt: (newTasks: Task[], newLinks: LinkType[]) => void,
+    setTasks: (newTasks: Task[]) => void
+) => {
+    // Vérifier si la tâche est un parent (elle apparaît comme source dans au moins un lien)
+    const isParent = links.some(l => l.source === updatedTask.id);
+    if (isParent) {
+        const oldParent = tasks.find(task => task.id === updatedTask.id);
+        if (!oldParent) return;
+        propagateChanges(oldParent, updatedTask, tasks, links, updateGantt, setTasks);
+    } else {
+        const updatedTasks = tasks.map(task =>
+            task.id === updatedTask.id ? { ...task, ...updatedTask } : task
+        );
+        setTasks(updatedTasks);
+        updateGantt(updatedTasks, links);
+    }
+};
+
 export default function HomePage() {
     const { data: session, status } = useSession();
 
     const [tasks, setTasks] = useState<Task[]>([]);
-    const [links, setLinks] = useState<Link[]>([]);
+    const [links, setLinks] = useState<LinkType[]>([]);
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
     const [newTaskName, setNewTaskName] = useState<string>("");
@@ -70,7 +149,7 @@ export default function HomePage() {
     const isUpdatingRef = useRef<boolean>(false);
     const skipNextGanttUpdateRef = useRef<boolean>(false);
 
-    // Chargement initial des données depuis l'API
+    // Chargement initial depuis l'API
     useEffect(() => {
         if (session) {
             const userGroupId = (session.user as any).groupId;
@@ -86,30 +165,8 @@ export default function HomePage() {
         }
     }, [session]);
 
-    // Migration des données stockées en local (si présentes) vers la base
-    useEffect(() => {
-        if (session) {
-            const localDataStr = localStorage.getItem("ganttData");
-            if (localDataStr) {
-                try {
-                    const localData = JSON.parse(localDataStr);
-                    if (
-                        (localData.tasks && localData.tasks.length > 0) ||
-                        (localData.links && localData.links.length > 0)
-                    ) {
-                        console.log("Migration des données locales vers la base :", localData);
-                        updateGantt(localData.tasks, localData.links);
-                        localStorage.removeItem("ganttData");
-                    }
-                } catch (e) {
-                    console.error("Erreur lors de l'analyse des données du local storage", e);
-                }
-            }
-        }
-    }, [session]);
-
-    // Mise à jour du Gantt dans la base
-    async function updateGantt(newTasks: Task[], newLinks: Link[]) {
+    // Mise à jour du Gantt en base
+    async function updateGantt(newTasks: Task[], newLinks: LinkType[]) {
         if (session) {
             const userGroupId = (session.user as any).groupId;
             const res = await fetch(`/api/gantt/${userGroupId}`, {
@@ -146,7 +203,7 @@ export default function HomePage() {
             end_date: endDateTime,
             duration: computedDuration,
             progress: newProgress,
-            open: true
+            open: true,
         };
 
         const updatedTasks = [...tasks, newTask];
@@ -178,55 +235,6 @@ export default function HomePage() {
         setEditProgress(task.progress);
     };
 
-    const propagateChanges = (existingTask: Task, updatedTask: Task) => {
-        const newPredStart = new Date(updatedTask.start_date);
-        const newPredEnd = new Date(updatedTask.end_date);
-        const updatedTasks = tasks.map(task => {
-            const link = links.find(l => l.target === task.id && l.source === existingTask.id);
-            if (link) {
-                const oldDepStart = new Date(task.start_date);
-                const oldDepEnd = new Date(task.end_date);
-                const durationMs = oldDepEnd.getTime() - oldDepStart.getTime();
-                let newDepStart: Date;
-                let newDepEnd: Date;
-                let gap: number;
-                switch (link.type) {
-                    case "0":
-                        gap = link.initialGap ?? (oldDepStart.getTime() - new Date(existingTask.end_date).getTime());
-                        newDepStart = new Date(newPredEnd.getTime() + gap);
-                        newDepEnd = new Date(newDepStart.getTime() + durationMs);
-                        break;
-                    case "1":
-                        gap = link.initialGap ?? (oldDepStart.getTime() - new Date(existingTask.start_date).getTime());
-                        newDepStart = new Date(newPredStart.getTime() + gap);
-                        newDepEnd = new Date(newDepStart.getTime() + durationMs);
-                        break;
-                    case "2":
-                        gap = link.initialGap ?? (oldDepEnd.getTime() - new Date(existingTask.end_date).getTime());
-                        newDepEnd = new Date(newPredEnd.getTime() + gap);
-                        newDepStart = new Date(newDepEnd.getTime() - durationMs);
-                        break;
-                    case "3":
-                        gap = link.initialGap ?? (oldDepEnd.getTime() - new Date(existingTask.start_date).getTime());
-                        newDepEnd = new Date(newPredStart.getTime() + gap);
-                        newDepStart = new Date(newDepEnd.getTime() - durationMs);
-                        break;
-                    default:
-                        return task;
-                }
-                return {
-                    ...task,
-                    start_date: formatDateTime(newDepStart),
-                    end_date: formatDateTime(newDepEnd),
-                    duration: durationMs / (1000 * 60 * 60)
-                };
-            }
-            return task;
-        });
-        setTasks(updatedTasks);
-        updateGantt(updatedTasks, links);
-    };
-
     const handleEditTask = (e: FormEvent) => {
         e.preventDefault();
         if (!editingTask || !editStartDate || !editEndDate) {
@@ -250,90 +258,31 @@ export default function HomePage() {
             start_date: startDateTime,
             end_date: endDateTime,
             duration: computedDuration,
-            progress: editProgress
+            progress: editProgress,
         };
 
+        // Si la tâche éditée est un parent, propager le changement aux tâches dépendantes
         const dependentLinks = links.filter(link => link.source === editingTask.id);
-        if (
-            (updatedTask.start_date !== editingTask.start_date ||
-                updatedTask.end_date !== editingTask.end_date) &&
-            dependentLinks.length > 0
-        ) {
-            propagateChanges(editingTask, updatedTask);
+        if (dependentLinks.length > 0) {
+            propagateChanges(editingTask, updatedTask, tasks, links, updateGantt, setTasks);
         }
 
-        const updatedTasks = tasks.map(task => task.id === updatedTask.id ? { ...task, ...updatedTask } : task);
+        const updatedTasks = tasks.map(task =>
+            task.id === updatedTask.id ? { ...task, ...updatedTask } : task
+        );
         setTasks(updatedTasks);
         updateGantt(updatedTasks, links);
         setEditingTask(null);
         isUpdatingRef.current = false;
     };
 
-    const handleGanttTaskUpdate = (updatedTask: any) => {
+    const onGanttTaskUpdate = (updatedTask: any) => {
         if (skipNextGanttUpdateRef.current) {
             skipNextGanttUpdateRef.current = false;
             return;
         }
         if (isUpdatingRef.current) return;
-        const existingTask = tasks.find(task => task.id === updatedTask.id);
-        if (!existingTask) return;
-        const dependentLinks = links.filter(link => link.source === updatedTask.id);
-        if (
-            (updatedTask.start_date !== existingTask.start_date ||
-                updatedTask.end_date !== existingTask.end_date) &&
-            dependentLinks.length > 0
-        ) {
-            const newPredStart = new Date(updatedTask.start_date);
-            const newPredEnd = new Date(updatedTask.end_date);
-            const updatedTasks = tasks.map(task => {
-                const link = dependentLinks.find(l => l.target === task.id);
-                if (link) {
-                    const oldDepStart = new Date(task.start_date);
-                    const oldDepEnd = new Date(task.end_date);
-                    const durationMs = oldDepEnd.getTime() - oldDepStart.getTime();
-                    let newDepStart: Date;
-                    let newDepEnd: Date;
-                    let gap: number;
-                    switch (link.type) {
-                        case "0":
-                            gap = link.initialGap ?? (oldDepStart.getTime() - new Date(existingTask.end_date).getTime());
-                            newDepStart = new Date(newPredEnd.getTime() + gap);
-                            newDepEnd = new Date(newDepStart.getTime() + durationMs);
-                            break;
-                        case "1":
-                            gap = link.initialGap ?? (oldDepStart.getTime() - new Date(existingTask.start_date).getTime());
-                            newDepStart = new Date(newPredStart.getTime() + gap);
-                            newDepEnd = new Date(newDepStart.getTime() + durationMs);
-                            break;
-                        case "2":
-                            gap = link.initialGap ?? (oldDepEnd.getTime() - new Date(existingTask.end_date).getTime());
-                            newDepEnd = new Date(newPredEnd.getTime() + gap);
-                            newDepStart = new Date(newDepEnd.getTime() - durationMs);
-                            break;
-                        case "3":
-                            gap = link.initialGap ?? (oldDepEnd.getTime() - new Date(existingTask.start_date).getTime());
-                            newDepEnd = new Date(newPredStart.getTime() + gap);
-                            newDepStart = new Date(newDepEnd.getTime() - durationMs);
-                            break;
-                        default:
-                            return task;
-                    }
-                    return {
-                        ...task,
-                        start_date: formatDateTime(newDepStart),
-                        end_date: formatDateTime(newDepEnd),
-                        duration: durationMs / (1000 * 60 * 60)
-                    };
-                }
-                return task;
-            });
-            setTasks(updatedTasks);
-            updateGantt(updatedTasks, links);
-        } else {
-            const updatedTasks = tasks.map(task => task.id === updatedTask.id ? { ...task, ...updatedTask } : task);
-            setTasks(updatedTasks);
-            updateGantt(updatedTasks, links);
-        }
+        handleGanttTaskUpdate(updatedTask, tasks, links, updateGantt, setTasks);
     };
 
     const sortedTasks = [...tasks].sort(
@@ -387,7 +336,7 @@ export default function HomePage() {
         <div className="homepage-container">
             <header className="homepage-header p-3">
                 <Row className="align-items-center">
-                    <Col className={"text-lg-start"}>
+                    <Col className="text-lg-start">
                         <h1>Gantt App</h1>
                         <p className="lead">Gestion de projet multi-groupes</p>
                     </Col>
@@ -422,7 +371,12 @@ export default function HomePage() {
                                         <div>
                                             <h5>{task.text}</h5>
                                             <small>
-                                                Spécialités : {task.specialty.join(", ")} | Début : {formatDateOnly(task.start_date)} {new Date(task.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | Fin : {formatDateOnly(task.end_date)} {new Date(task.end_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                Spécialités : {task.specialty.join(", ")} | Début : {formatDateOnly(task.start_date)}{" "}
+                                                {new Date(task.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | Fin :{" "}
+                                                {formatDateOnly(task.end_date)}{" "}
+                                                {new Date(task.end_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | Durée :{" "}
+                                                {((new Date(task.end_date).getTime() - new Date(task.start_date).getTime()) / (1000 * 60 * 60)).toFixed(2)}{" "}
+                                                heure(s) | Progression : {Math.round(task.progress * 100)}%
                                             </small>
                                         </div>
                                         <div>
@@ -446,8 +400,8 @@ export default function HomePage() {
                         ) : (
                             <GanttChart
                                 tasksData={tasksData}
-                                onTaskUpdate={handleGanttTaskUpdate}
-                                onLinkChange={(newLinks: Link[]) => {
+                                onTaskUpdate={onGanttTaskUpdate}
+                                onLinkChange={(newLinks: LinkType[]) => {
                                     setLinks(newLinks);
                                     updateGantt(tasks, newLinks);
                                 }}
@@ -467,7 +421,7 @@ export default function HomePage() {
                     <div className="modal show fade d-block" tabIndex={-1} role="dialog">
                         <div className="modal-dialog modal-dialog-centered" role="document">
                             <div className="modal-content">
-                                <div className="modal-header">
+                                <div className="modal-header d-flex justify-content-between align-items-center">
                                     <h5 className="modal-title">Ajouter une tâche</h5>
                                     <button type="button" className="close" onClick={() => setIsModalOpen(false)}>
                                         <span aria-hidden="true">&times;</span>
@@ -505,7 +459,7 @@ export default function HomePage() {
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="form-group mb-3">
+                                        <div className="form-group mb-3 d-flex flex-column">
                                             <label>Date et heure de début</label>
                                             <DatePicker
                                                 selected={newStartDate}
@@ -518,7 +472,7 @@ export default function HomePage() {
                                                 placeholderText="Sélectionnez la date et l'heure de début"
                                             />
                                         </div>
-                                        <div className="form-group mb-3">
+                                        <div className="form-group mb-3 d-flex flex-column">
                                             <label>Date et heure de fin</label>
                                             <DatePicker
                                                 selected={newEndDate}

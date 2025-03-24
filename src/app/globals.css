@@ -179,3 +179,17 @@ body {
 .homepage-main {
     flex-grow: 1;
 }
+
+/* Couleurs de tâches en fonction de la progression */
+.red-task {
+    background-color: #e53e3e !important;
+}
+.orange-task {
+    background-color: #ed8936 !important;
+}
+.yellow-task {
+    background-color: #ecc94b !important;
+}
+.green-task {
+    background-color: #48bb78 !important;
+}
