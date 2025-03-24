@@ -1,94 +1,181 @@
 body {
+    background-color: #f8f9fa;
+}
+
+/* Container principal de la page d'accueil */
+.homepage-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #f7f9fc;
     font-family: 'Roboto', sans-serif;
-    background-color: #f4f6f8;
-    color: #343a40;
+}
+
+/* Header modernisé avec dégradé et ombre */
+.homepage-header {
+    padding: 2rem;
+    background: linear-gradient(135deg, #007bff, #00c6ff);
+    color: #fff;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.homepage-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.homepage-header .lead {
+    font-size: 1.2rem;
     margin: 0;
-    padding: 0;
 }
 
-/* Header */
-header {
-    background: linear-gradient(90deg, #0056b3, #007bff);
-    color: #fff;
-    padding: 1.5rem 0;
+/* Main : centre le formulaire et ajoute un fond contrasté */
+.homepage-main {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* Titres principaux */
-h1, h2, h3 {
-    font-weight: 700;
-}
-
-/* Cards */
-.card {
-    border: none;
-    border-radius: 0.75rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
-}
-
-/* Boutons primaires modernisés */
-.btn-primary {
-    background-color: #007bff;
-    border-color: #007bff;
-    transition: background-color 0.3s, border-color 0.3s;
-}
-.btn-primary:hover, .btn-primary:focus {
-    background-color: #0069d9;
-    border-color: #0062cc;
-}
-
-.modal-content {
+/* Formulaire modernisé */
+.homepage-form {
+    width: 100%;
+    max-width: 400px;
+    background: #fff;
     border-radius: 0.5rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
 }
 
-.form-control {
-    border-radius: 0.375rem;
-    padding: 0.75rem;
+.homepage-form:hover {
+    transform: scale(1.02);
 }
 
-.react-datepicker-wrapper .form-control {
-    width: 100%;
+.homepage-form p {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
 }
 
-.modal.show {
-    z-index: 1100;
-}
-
-.fullpage-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1050;
-}
-
-/* Couleurs de tâches en fonction de la progression */
-.red-task {
-    background-color: #e53e3e !important;
-}
-.orange-task {
-    background-color: #ed8936 !important;
-}
-.yellow-task {
-    background-color: #ecc94b !important;
-}
-.green-task {
-    background-color: #48bb78 !important;
-}
-
-/* Footer */
-footer {
-    background-color: #343a40;
-    color: #fff;
-    padding: 1rem 0;
-}
-
-a {
+.homepage-form a {
     color: #007bff;
     text-decoration: none;
+    font-weight: bold;
 }
-a:hover, a:focus {
+
+.homepage-form a:hover {
     text-decoration: underline;
+}
+
+/* Footer modernisé */
+.homepage-footer {
+    text-align: center;
+    padding: 1rem;
+    background: #343a40;
+    color: #fff;
+    font-size: 0.9rem;
+}
+
+/* Container principal de la page de connexion */
+.signin-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #f7f9fc;
+    font-family: 'Roboto', sans-serif;
+}
+
+.homepage-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.homepage-header .lead {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+/* Main spécifique à la page de connexion */
+.signin-main {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Formulaire de connexion modernisé */
+.signin-form {
+    width: 100%;
+    max-width: 400px;
+    background: #fff;
+    border-radius: 0.5rem;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.signin-form:hover {
+    transform: scale(1.02);
+}
+
+.signin-form h2 {
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.signin-form .form-group {
+    margin-bottom: 1rem;
+}
+
+.signin-form label {
+    font-weight: 600;
+}
+
+.signin-form input {
+    width: 100%;
+    padding: 0.5rem;
+    margin-top: 0.5rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+}
+
+.signin-form button {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+/* Container global */
+.homepage-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #f7f9fc;
+    font-family: 'Roboto', sans-serif;
+}
+
+/* Header commun */
+.homepage-header {
+    padding: 2rem;
+    background: linear-gradient(135deg, #007bff, #00c6ff);
+    color: #fff;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.homepage-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.homepage-header .lead {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+/* Main */
+.homepage-main {
+    flex-grow: 1;
 }
