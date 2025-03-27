@@ -175,12 +175,10 @@ body {
     margin: 0;
 }
 
-/* Main */
 .homepage-main {
     flex-grow: 1;
 }
 
-/* Couleurs de tâches en fonction de la progression */
 .red-task {
     background-color: #e53e3e !important;
 }
@@ -192,4 +190,9 @@ body {
 }
 .green-task {
     background-color: #48bb78 !important;
+}
+
+.list-group {
+    max-height: 19rem;
+    overflow-y: auto;
 }

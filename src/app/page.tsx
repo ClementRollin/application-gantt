@@ -7,9 +7,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { Button, Container, Row, Col } from "react-bootstrap";
-import GanttWrapper from "./GanttWrapper";
 
-// Chargement dynamique du composant Gantt
 const GanttChart = dynamic(() => import("./components/GanttChartComponent"), {
     ssr: false,
 });
@@ -32,7 +30,7 @@ export interface LinkType {
     source: string;
     target: string;
     type: "0" | "1" | "2" | "3";
-    // On ne stocke plus ici initialGap, car on va simplement calculer le delta.
+    initialGap?: number;
 }
 
 const formatDateTime = (date: Date): string => {
@@ -42,88 +40,63 @@ const formatDateTime = (date: Date): string => {
     )}:${pad(date.getMinutes())}:00`;
 };
 
-const formatDateOnly = (dateInput: any): string => {
+const formatDateOnly = (dateInput: string | Date): string => {
     const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
     const pad = (n: number) => (n < 10 ? "0" + n : n);
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
-/**
- * Calcule le delta entre la valeur actuelle de la date de référence du parent et sa valeur précédente.
- * Pour les types "0" et "2", la date de référence est la date de fin.
- * Pour les types "1" et "3", la date de référence est la date de début.
- */
-const getParentDelta = (oldParent: Task, newParent: Task, linkType: LinkType["type"]) => {
+const getParentDelta = (oldParent: Task, newParent: Task, linkType: LinkType["type"]): number => {
     let refOld: number, refNew: number;
     if (linkType === "0" || linkType === "2") {
         refOld = new Date(oldParent.end_date).getTime();
         refNew = new Date(newParent.end_date).getTime();
-    } else if (linkType === "1" || linkType === "3") {
+    } else {
         refOld = new Date(oldParent.start_date).getTime();
         refNew = new Date(newParent.start_date).getTime();
-    } else {
-        refOld = new Date(oldParent.end_date).getTime();
-        refNew = new Date(newParent.end_date).getTime();
     }
     return refNew - refOld;
 };
 
-/**
- * Propagation des changements de la tâche parente vers ses tâches dépendantes.
- * Pour chaque dépendance, on calcule le delta (différence) entre la nouvelle et l'ancienne date de référence du parent,
- * et on l'ajoute aux dates de la tâche dépendante.
- */
-const propagateChanges = (
+const updateLinksInitialGap = (oldParent: Task, tasks: Task[], links: LinkType[]): LinkType[] => {
+    return links.map(link => {
+        if (link.source === oldParent.id && link.initialGap === undefined) {
+            const depTask = tasks.find(t => t.id === link.target);
+            if (depTask) {
+                const gap = new Date(depTask.start_date).getTime() - new Date(oldParent.end_date).getTime();
+                return { ...link, initialGap: gap };
+            }
+        }
+        return link;
+    });
+};
+
+const propagateDependentTasks = (
     oldParent: Task,
     newParent: Task,
     tasks: Task[],
-    links: LinkType[],
-    updateGantt: (newTasks: Task[], newLinks: LinkType[]) => void,
-    setTasks: (newTasks: Task[]) => void
-) => {
-    const updatedTasks = tasks.map(task => {
-        const link = links.find(l => l.source === oldParent.id && l.target === task.id);
+    links: LinkType[]
+): Task[] => {
+    const updatedLinks: LinkType[] = updateLinksInitialGap(oldParent, tasks, links);
+    return tasks.map((task: Task) => {
+        if (task.id === oldParent.id) return newParent;
+        const link = updatedLinks.find(l => l.source === oldParent.id && l.target === task.id);
         if (link) {
-            // Calculer le delta selon le type de dépendance
-            const delta = getParentDelta(oldParent, newParent, link.type);
-            const newChildStart = new Date(new Date(task.start_date).getTime() + delta);
-            const newChildEnd = new Date(new Date(task.end_date).getTime() + delta);
+            const gap = link.initialGap !== undefined
+                ? link.initialGap
+                : new Date(task.start_date).getTime() - new Date(oldParent.end_date).getTime();
+            const childDurationMs = new Date(task.end_date).getTime() - new Date(task.start_date).getTime();
+            const newChildStart = new Date(new Date(newParent.end_date).getTime() + gap);
+            const newChildEnd = new Date(newChildStart.getTime() + childDurationMs);
             return {
                 ...task,
                 start_date: formatDateTime(newChildStart),
-                end_date: formatDateTime(newChildEnd)
+                end_date: formatDateTime(newChildEnd),
+                duration: childDurationMs / (1000 * 60 * 60)
             };
         }
         return task;
     });
-    setTasks(updatedTasks);
-    updateGantt(updatedTasks, links);
-};
-
-/**
- * Mise à jour de la tâche via le Gantt.
- * Si la tâche mise à jour est un parent, on propage le décalage à ses tâches dépendantes.
- */
-const handleGanttTaskUpdate = (
-    updatedTask: any,
-    tasks: Task[],
-    links: LinkType[],
-    updateGantt: (newTasks: Task[], newLinks: LinkType[]) => void,
-    setTasks: (newTasks: Task[]) => void
-) => {
-    // Vérifier si la tâche est un parent (elle apparaît comme source dans au moins un lien)
-    const isParent = links.some(l => l.source === updatedTask.id);
-    if (isParent) {
-        const oldParent = tasks.find(task => task.id === updatedTask.id);
-        if (!oldParent) return;
-        propagateChanges(oldParent, updatedTask, tasks, links, updateGantt, setTasks);
-    } else {
-        const updatedTasks = tasks.map(task =>
-            task.id === updatedTask.id ? { ...task, ...updatedTask } : task
-        );
-        setTasks(updatedTasks);
-        updateGantt(updatedTasks, links);
-    }
 };
 
 export default function HomePage() {
@@ -132,6 +105,9 @@ export default function HomePage() {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [links, setLinks] = useState<LinkType[]>([]);
     const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+
+    const [newDependentId, setNewDependentId] = useState<string>("");
+    const [editDependentId, setEditDependentId] = useState<string>("");
 
     const [newTaskName, setNewTaskName] = useState<string>("");
     const [newSpecialty, setNewSpecialty] = useState<string[]>(["UI/UX"]);
@@ -147,9 +123,31 @@ export default function HomePage() {
     const [editProgress, setEditProgress] = useState<number>(0);
 
     const isUpdatingRef = useRef<boolean>(false);
-    const skipNextGanttUpdateRef = useRef<boolean>(false);
 
-    // Chargement initial depuis l'API
+    useEffect(() => {
+        if (session) {
+            const userGroupId = (session.user as any).groupId;
+            async function loadGanttData() {
+                try {
+                    const res = await fetch(`/api/gantt/${userGroupId}`, { credentials: "include" });
+                    if (!res.ok) throw new Error("Erreur lors du chargement des données du Gantt");
+                    const data = await res.json();
+                    const { tasks: dbTasks, links: dbLinks } = data;
+                    const parsedTasks: Task[] = dbTasks.map((t: any) => ({
+                        ...t,
+                        start_date: formatDateTime(new Date(t.start_date)),
+                        end_date: formatDateTime(new Date(t.end_date)),
+                    }));
+                    setTasks(parsedTasks);
+                    setLinks(dbLinks || []);
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+            loadGanttData();
+        }
+    }, [session]);
+
     useEffect(() => {
         if (session) {
             const userGroupId = (session.user as any).groupId;
@@ -165,7 +163,6 @@ export default function HomePage() {
         }
     }, [session]);
 
-    // Mise à jour du Gantt en base
     async function updateGantt(newTasks: Task[], newLinks: LinkType[]) {
         if (session) {
             const userGroupId = (session.user as any).groupId;
@@ -175,9 +172,7 @@ export default function HomePage() {
                 credentials: "include",
                 body: JSON.stringify({ tasks: newTasks, links: newLinks })
             });
-            if (!res.ok) {
-                console.error("Erreur lors de la mise à jour du Gantt");
-            }
+            if (!res.ok) console.error("Erreur lors de la mise à jour du Gantt");
         }
     }
 
@@ -206,9 +201,27 @@ export default function HomePage() {
             open: true,
         };
 
-        const updatedTasks = [...tasks, newTask];
+        let updatedTasks: Task[] = [...tasks, newTask];
+        let updatedLinks: LinkType[] = [...links];
+
+        if (newDependentId) {
+            const dependentTask = tasks.find(t => t.id === newDependentId);
+            if (dependentTask) {
+                const newLink: LinkType = {
+                    id: Date.now().toString(),
+                    source: newTask.id,
+                    target: newDependentId,
+                    type: "0",
+                    initialGap: new Date(dependentTask.start_date).getTime() - new Date(newTask.end_date).getTime()
+                };
+                updatedLinks.push(newLink);
+            }
+            setNewDependentId("");
+        }
+
         setTasks(updatedTasks);
-        updateGantt(updatedTasks, links);
+        setLinks(updatedLinks);
+        updateGantt(updatedTasks, updatedLinks);
 
         setNewTaskName("");
         setNewSpecialty(["UI/UX"]);
@@ -219,8 +232,8 @@ export default function HomePage() {
     };
 
     const handleDeleteTask = (id: string) => {
-        const updatedTasks = tasks.filter(task => task.id !== id);
-        const updatedLinks = links.filter(link => link.source !== id && link.target !== id);
+        const updatedTasks: Task[] = tasks.filter(task => task.id !== id);
+        const updatedLinks: LinkType[] = links.filter(link => link.source !== id && link.target !== id);
         setTasks(updatedTasks);
         setLinks(updatedLinks);
         updateGantt(updatedTasks, updatedLinks);
@@ -233,6 +246,8 @@ export default function HomePage() {
         setEditStartDate(new Date(task.start_date));
         setEditEndDate(new Date(task.end_date));
         setEditProgress(task.progress);
+        const existingLink = links.find(link => link.source === task.id);
+        setEditDependentId(existingLink ? existingLink.target : "");
     };
 
     const handleEditTask = (e: FormEvent) => {
@@ -261,47 +276,72 @@ export default function HomePage() {
             progress: editProgress,
         };
 
-        // Si la tâche éditée est un parent, propager le changement aux tâches dépendantes
         const dependentLinks = links.filter(link => link.source === editingTask.id);
+        let newTasks: Task[];
         if (dependentLinks.length > 0) {
-            propagateChanges(editingTask, updatedTask, tasks, links, updateGantt, setTasks);
+            newTasks = propagateDependentTasks(editingTask, updatedTask, tasks, links);
+        } else {
+            newTasks = tasks.map(task =>
+                task.id === updatedTask.id ? updatedTask : task
+            );
         }
 
-        const updatedTasks = tasks.map(task =>
-            task.id === updatedTask.id ? { ...task, ...updatedTask } : task
-        );
-        setTasks(updatedTasks);
-        updateGantt(updatedTasks, links);
+        let newLinks: LinkType[] = [...links];
+        const existingLink = links.find(link => link.source === editingTask.id);
+        if (editDependentId) {
+            const dependentTask = tasks.find(t => t.id === editDependentId);
+            if (dependentTask) {
+                if (existingLink) {
+                    newLinks = newLinks.map(link =>
+                        link.source === editingTask.id
+                            ? {
+                                ...link,
+                                target: editDependentId,
+                                initialGap: new Date(dependentTask.start_date).getTime() - new Date(updatedTask.end_date).getTime()
+                            }
+                            : link
+                    );
+                } else {
+                    const newLink: LinkType = {
+                        id: Date.now().toString(),
+                        source: editingTask.id,
+                        target: editDependentId,
+                        type: "0",
+                        initialGap: new Date(dependentTask.start_date).getTime() - new Date(updatedTask.end_date).getTime()
+                    };
+                    newLinks.push(newLink);
+                }
+            }
+        } else {
+            if (existingLink) {
+                newLinks = newLinks.filter(link => link.source !== editingTask.id);
+            }
+        }
+
+        setTasks(newTasks);
+        setLinks(newLinks);
+        updateGantt(newTasks, newLinks);
         setEditingTask(null);
         isUpdatingRef.current = false;
     };
 
-    const onGanttTaskUpdate = (updatedTask: any) => {
-        if (skipNextGanttUpdateRef.current) {
-            skipNextGanttUpdateRef.current = false;
-            return;
-        }
-        if (isUpdatingRef.current) return;
-        handleGanttTaskUpdate(updatedTask, tasks, links, updateGantt, setTasks);
+    const tasksData = {
+        data: [...tasks].sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime()),
+        links
     };
-
-    const sortedTasks = [...tasks].sort(
-        (a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
-    );
-    const tasksData = { data: sortedTasks, links };
 
     const handleSpecialtyChange = (value: string, checked: boolean, isEdit = false) => {
         if (isEdit) {
             if (checked) {
-                setEditSpecialty(prev => [...prev, value]);
+                setEditSpecialty((prev: string[]) => [...prev, value]);
             } else {
-                setEditSpecialty(prev => prev.filter(s => s !== value));
+                setEditSpecialty((prev: string[]) => prev.filter((s: string) => s !== value));
             }
         } else {
             if (checked) {
-                setNewSpecialty(prev => [...prev, value]);
+                setNewSpecialty((prev: string[]) => [...prev, value]);
             } else {
-                setNewSpecialty(prev => prev.filter(s => s !== value));
+                setNewSpecialty((prev: string[]) => prev.filter((s: string) => s !== value));
             }
         }
     };
@@ -335,17 +375,19 @@ export default function HomePage() {
     return (
         <div className="homepage-container">
             <header className="homepage-header p-3">
-                <Row className="align-items-center">
-                    <Col className="text-lg-start">
-                        <h1>Gantt App</h1>
-                        <p className="lead">Gestion de projet multi-groupes</p>
-                    </Col>
-                    <Col className="text-end">
-                        <Button variant="danger" onClick={() => signOut({ callbackUrl: "/" })}>
-                            Déconnexion
-                        </Button>
-                    </Col>
-                </Row>
+                <Container className={"p-3"}>
+                    <Row className="align-items-center">
+                        <Col className="text-lg-start">
+                            <h1>Gantt App</h1>
+                            <p className="lead">Gestion de projet multi-groupes</p>
+                        </Col>
+                        <Col className="text-end">
+                            <Button variant="danger" onClick={() => signOut({ callbackUrl: "/" })}>
+                                Déconnexion
+                            </Button>
+                        </Col>
+                    </Row>
+                </Container>
             </header>
             <main className="homepage-main">
                 <Container className="p-3">
@@ -362,21 +404,24 @@ export default function HomePage() {
 
                     <section className="mb-4">
                         <h3>Liste des tâches</h3>
-                        {sortedTasks.length === 0 ? (
+                        {tasks.length === 0 ? (
                             <p>Aucune tâche à afficher.</p>
                         ) : (
                             <ul className="list-group">
-                                {sortedTasks.map(task => (
+                                {tasks.map((task: Task) => (
                                     <li key={task.id} className="list-group-item d-flex justify-content-between align-items-center">
                                         <div>
-                                            <h5>{task.text}</h5>
+                                            <h5><strong>{task.text}</strong></h5>
                                             <small>
-                                                Spécialités : {task.specialty.join(", ")} | Début : {formatDateOnly(task.start_date)}{" "}
-                                                {new Date(task.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | Fin :{" "}
+                                                <strong>Spécialités :</strong> {task.specialty.join(", ")} | <strong>Début :</strong> {formatDateOnly(task.start_date)}{" "}
+                                                {new Date(task.start_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | <strong>Fin :</strong>{" "}
                                                 {formatDateOnly(task.end_date)}{" "}
-                                                {new Date(task.end_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | Durée :{" "}
-                                                {((new Date(task.end_date).getTime() - new Date(task.start_date).getTime()) / (1000 * 60 * 60)).toFixed(2)}{" "}
-                                                heure(s) | Progression : {Math.round(task.progress * 100)}%
+                                                {new Date(task.end_date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} | <strong>Durée :</strong>{" "}
+                                                {(
+                                                    (new Date(task.end_date).getTime() - new Date(task.start_date).getTime()) /
+                                                    (1000 * 60 * 60)
+                                                ).toFixed(2)}{" "}
+                                                heure(s) | <strong>Progression :</strong> {Math.round(task.progress * 100)}%
                                             </small>
                                         </div>
                                         <div>
@@ -395,17 +440,10 @@ export default function HomePage() {
 
                     <section>
                         <h3>Diagramme de Gantt</h3>
-                        {sortedTasks.length === 0 ? (
+                        {tasks.length === 0 ? (
                             <p>Aucune tâche ajoutée. Cliquez sur "Ajouter une tâche" pour démarrer.</p>
                         ) : (
-                            <GanttChart
-                                tasksData={tasksData}
-                                onTaskUpdate={onGanttTaskUpdate}
-                                onLinkChange={(newLinks: LinkType[]) => {
-                                    setLinks(newLinks);
-                                    updateGantt(tasks, newLinks);
-                                }}
-                            />
+                            <GanttChart tasksData={tasksData} />
                         )}
                     </section>
                 </Container>
@@ -414,7 +452,6 @@ export default function HomePage() {
                 <p>© {new Date().getFullYear()} Gantt App. Tous droits réservés.</p>
             </footer>
 
-            {/* Modal d'ajout de tâche */}
             {isModalOpen && (
                 <>
                     <div className="fullpage-overlay" onClick={() => setIsModalOpen(false)}></div>
@@ -442,7 +479,7 @@ export default function HomePage() {
                                         <div className="form-group mb-3">
                                             <label>Spécialités</label>
                                             <div className="d-flex flex-wrap">
-                                                {specialtyOptions.map(option => (
+                                                {specialtyOptions.map((option: string) => (
                                                     <div key={option} className="form-check me-3">
                                                         <input
                                                             className="form-check-input"
@@ -497,6 +534,21 @@ export default function HomePage() {
                                                 step="0.1"
                                             />
                                         </div>
+                                        <div className="form-group mb-3">
+                                            <label>Tâche dépendante</label>
+                                            <select
+                                                className="form-control"
+                                                value={newDependentId}
+                                                onChange={(e) => setNewDependentId(e.target.value)}
+                                            >
+                                                <option value="">Aucune</option>
+                                                {tasks.map((task: Task) => (
+                                                    <option key={task.id} value={task.id}>
+                                                        {task.text}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
                                     <div className="modal-footer">
                                         <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
@@ -513,14 +565,13 @@ export default function HomePage() {
                 </>
             )}
 
-            {/* Modal d'édition de tâche */}
             {editingTask && (
                 <>
                     <div className="fullpage-overlay" onClick={() => setEditingTask(null)}></div>
                     <div className="modal show fade d-block" tabIndex={-1} role="dialog">
                         <div className="modal-dialog modal-dialog-centered" role="document">
                             <div className="modal-content">
-                                <div className="modal-header">
+                                <div className="modal-header d-flex justify-content-between align-items-center">
                                     <h5 className="modal-title">Modifier la tâche</h5>
                                     <button type="button" className="close" onClick={() => setEditingTask(null)}>
                                         <span aria-hidden="true">&times;</span>
@@ -541,7 +592,7 @@ export default function HomePage() {
                                         <div className="form-group mb-3">
                                             <label>Spécialités</label>
                                             <div className="d-flex flex-wrap">
-                                                {specialtyOptions.map(option => (
+                                                {specialtyOptions.map((option: string) => (
                                                     <div key={option} className="form-check me-3">
                                                         <input
                                                             className="form-check-input"
@@ -558,7 +609,7 @@ export default function HomePage() {
                                                 ))}
                                             </div>
                                         </div>
-                                        <div className="form-group mb-3">
+                                        <div className="form-group mb-3 d-flex flex-column">
                                             <label>Date et heure de début</label>
                                             <DatePicker
                                                 selected={editStartDate}
@@ -571,7 +622,7 @@ export default function HomePage() {
                                                 placeholderText="Sélectionnez la date et l'heure de début"
                                             />
                                         </div>
-                                        <div className="form-group mb-3">
+                                        <div className="form-group mb-3 d-flex flex-column">
                                             <label>Date et heure de fin</label>
                                             <DatePicker
                                                 selected={editEndDate}
@@ -595,6 +646,21 @@ export default function HomePage() {
                                                 max="1"
                                                 step="0.1"
                                             />
+                                        </div>
+                                        <div className="form-group mb-3">
+                                            <label>Tâche dépendante</label>
+                                            <select
+                                                className="form-control"
+                                                value={editDependentId}
+                                                onChange={(e) => setEditDependentId(e.target.value)}
+                                            >
+                                                <option value="">Aucune</option>
+                                                {tasks.filter((t: Task) => t.id !== editingTask.id).map((task: Task) => (
+                                                    <option key={task.id} value={task.id}>
+                                                        {task.text}
+                                                    </option>
+                                                ))}
+                                            </select>
                                         </div>
                                     </div>
                                     <div className="modal-footer">

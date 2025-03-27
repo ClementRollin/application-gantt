@@ -33,8 +33,9 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
         ganttAny.config.date_format = "%Y-%m-%dT%H:%i:%s";
         ganttAny.config.xml_date = "%Y-%m-%dT%H:%i:%s";
         ganttAny.config.duration_unit = "hour";
-        ganttAny.config.duration_step = 0.1;
+        ganttAny.config.duration_step = 0.5;
         ganttAny.config.round_durations = false;
+        ganttAny.config.readonly = true;
 
         ganttAny.config.columns = [
             { name: "text", label: "Nom de la tâche", tree: true, width: 150 },

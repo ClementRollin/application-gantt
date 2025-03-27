@@ -80,7 +80,6 @@ export default function TaskForm({ show, onHide, onSubmit, initialData = {} }: T
                             max={100}
                         />
                     </Form.Group>
-                    {/* Ajoute ici un champ ou un sélecteur pour gérer les dépendances si nécessaire */}
                 </Modal.Body>
                 <Modal.Footer>
                     <Button variant="secondary" onClick={onHide}>
