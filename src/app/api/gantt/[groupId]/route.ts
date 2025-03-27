@@ -3,17 +3,11 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { supabase } from "@/lib/supabaseClient";
 
-interface ParamsContext {
-    params: {
-        groupId: string;
-    };
-}
-
 export async function GET(
     request: NextRequest,
-    context: ParamsContext
+    { params }: { params: { groupId: string } }
 ): Promise<Response> {
-    const { groupId } = context.params;
+    const groupId = params.groupId;
     const groupIdNumber = Number(groupId);
     if (isNaN(groupIdNumber)) {
         return NextResponse.json({ error: "Paramètre groupId invalide" }, { status: 400 });
@@ -52,9 +46,9 @@ export async function GET(
 
 export async function PUT(
     request: NextRequest,
-    context: ParamsContext
+    { params }: { params: { groupId: string } }
 ): Promise<Response> {
-    const { groupId } = context.params;
+    const groupId = params.groupId;
     const groupIdNumber = Number(groupId);
     if (isNaN(groupIdNumber)) {
         return NextResponse.json({ error: "Paramètre groupId invalide" }, { status: 400 });
