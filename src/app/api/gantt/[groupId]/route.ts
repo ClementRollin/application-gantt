@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { supabase } from "@/lib/supabaseClient";
 
-export async function GET(request: Request, { params }: { params: { groupId: string } }) {
+export async function GET(request: Request, context: { params: { groupId: string } }): Promise<Response> {
+    const { params } = context;
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
