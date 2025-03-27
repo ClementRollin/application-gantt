@@ -13,8 +13,9 @@ export async function GET(
             return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
         }
 
+        const groupIdStr = Array.isArray(params.groupId) ? params.groupId[0] : params.groupId;
         const userGroupId = Number((session.user as any).groupId);
-        const groupIdParam = Number(params.groupId);
+        const groupIdParam = Number(groupIdStr);
         if (userGroupId !== groupIdParam) {
             return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
         }
