@@ -3,27 +3,37 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { supabase } from "@/lib/supabaseClient";
 
+interface ParamsContext {
+    params: {
+        groupId: string;
+    };
+}
+
 export async function GET(
     request: NextRequest,
-    { params }: { params: { groupId: string | string[] } }
+    context: ParamsContext
 ): Promise<Response> {
+    const { groupId } = context.params;
+    const groupIdNumber = Number(groupId);
+    if (isNaN(groupIdNumber)) {
+        return NextResponse.json({ error: "Paramètre groupId invalide" }, { status: 400 });
+    }
+
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
             return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
         }
 
-        const groupIdStr = Array.isArray(params.groupId) ? params.groupId[0] : params.groupId;
         const userGroupId = Number((session.user as any).groupId);
-        const groupIdParam = Number(groupIdStr);
-        if (userGroupId !== groupIdParam) {
+        if (userGroupId !== groupIdNumber) {
             return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
         }
 
         const { data, error } = await supabase
             .from("gantt")
             .select("*")
-            .eq("group_id", groupIdParam)
+            .eq("group_id", groupIdNumber)
             .single();
 
         if (error) {
@@ -42,8 +52,14 @@ export async function GET(
 
 export async function PUT(
     request: NextRequest,
-    { params }: { params: Record<string, string> }
-) {
+    context: ParamsContext
+): Promise<Response> {
+    const { groupId } = context.params;
+    const groupIdNumber = Number(groupId);
+    if (isNaN(groupIdNumber)) {
+        return NextResponse.json({ error: "Paramètre groupId invalide" }, { status: 400 });
+    }
+
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
@@ -51,9 +67,7 @@ export async function PUT(
         }
 
         const userGroupId = Number((session.user as any).groupId);
-        const groupIdParam = Number(params.groupId);
-
-        if (userGroupId !== groupIdParam) {
+        if (userGroupId !== groupIdNumber) {
             return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
         }
 
@@ -64,7 +78,7 @@ export async function PUT(
             .from("gantt")
             .upsert(
                 {
-                    group_id: groupIdParam,
+                    group_id: groupIdNumber,
                     tasks: Array.isArray(tasks) ? tasks : [],
                     links: Array.isArray(links) ? links : [],
                 },
