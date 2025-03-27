@@ -3,8 +3,10 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { supabase } from "@/lib/supabaseClient";
 
-export async function GET(request: Request, context: { params: { groupId: string } }): Promise<Response> {
-    const { params } = context;
+export async function GET(
+    request: NextRequest,
+    { params }: { params: Record<string, string> }
+): Promise<Response> {
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
@@ -37,7 +39,10 @@ export async function GET(request: Request, context: { params: { groupId: string
     }
 }
 
-export async function PUT(req: NextRequest, context: { params: { groupId: string } }) {
+export async function PUT(
+    request: NextRequest,
+    { params }: { params: Record<string, string> }
+) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) {
@@ -45,13 +50,13 @@ export async function PUT(req: NextRequest, context: { params: { groupId: string
         }
 
         const userGroupId = Number((session.user as any).groupId);
-        const groupIdParam = Number(context.params.groupId);
+        const groupIdParam = Number(params.groupId);
 
         if (userGroupId !== groupIdParam) {
             return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
         }
 
-        const json = await req.json();
+        const json = await request.json();
         const { tasks, links } = json;
 
         const { data, error } = await supabase
@@ -60,7 +65,7 @@ export async function PUT(req: NextRequest, context: { params: { groupId: string
                 {
                     group_id: groupIdParam,
                     tasks: Array.isArray(tasks) ? tasks : [],
-                    links: Array.isArray(links) ? links : []
+                    links: Array.isArray(links) ? links : [],
                 },
                 { onConflict: "group_id" }
             )
