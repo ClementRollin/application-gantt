@@ -9,11 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
     "axios": "^1.8.4",
     "bootstrap": "^5.3.3",
     "dhtmlx-gantt": "^9.0.6",
     "next": "^15.2.3",
+    "next-auth": "^4.24.11",
     "react": "^18.0.0",
+    "react-bootstrap": "^2.10.9",
     "react-datepicker": "^8.2.1",
     "react-dom": "^18.0.0",
     "swr": "^2.3.3"

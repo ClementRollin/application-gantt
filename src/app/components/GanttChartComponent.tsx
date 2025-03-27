@@ -1,7 +1,7 @@
 "use client";
-import React, { useEffect, useRef } from 'react';
-import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
-import gantt from 'dhtmlx-gantt';
+import React, { useEffect, useRef } from "react";
+import "dhtmlx-gantt/codebase/dhtmlxgantt.css";
+import gantt from "dhtmlx-gantt";
 
 export interface GanttChartProps {
     tasksData: {
@@ -33,8 +33,9 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
         ganttAny.config.date_format = "%Y-%m-%dT%H:%i:%s";
         ganttAny.config.xml_date = "%Y-%m-%dT%H:%i:%s";
         ganttAny.config.duration_unit = "hour";
-        ganttAny.config.duration_step = 0.1;
+        ganttAny.config.duration_step = 0.5;
         ganttAny.config.round_durations = false;
+        ganttAny.config.readonly = true;
 
         ganttAny.config.columns = [
             { name: "text", label: "Nom de la tâche", tree: true, width: 150 },
@@ -60,7 +61,7 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
             }
         ];
 
-        ganttAny.templates.task_class = function(start: any, end: any, task: any) {
+        ganttAny.templates.task_class = function (start: any, end: any, task: any) {
             const p = task.progress * 100;
             if (p < 26) {
                 return "red-task";
@@ -81,7 +82,7 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
             if (onTaskUpdate) {
                 onTaskUpdate(item);
             }
-            return true;
+            return false;
         });
 
         ganttAny.attachEvent("onAfterLinkAdd", (id: any, link: any) => {
@@ -89,21 +90,21 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
                 const allLinks = ganttAny.getLinks();
                 onLinkChange(allLinks);
             }
-            return true;
+            return false;
         });
         ganttAny.attachEvent("onAfterLinkDelete", (id: any, link: any) => {
             if (onLinkChange) {
                 const allLinks = ganttAny.getLinks();
                 onLinkChange(allLinks);
             }
-            return true;
+            return false;
         });
         ganttAny.attachEvent("onAfterLinkUpdate", (id: any, link: any) => {
             if (onLinkChange) {
                 const allLinks = ganttAny.getLinks();
                 onLinkChange(allLinks);
             }
-            return true;
+            return false;
         });
 
         return () => {
@@ -119,14 +120,14 @@ const GanttChartComponent: React.FC<GanttChartProps> = ({ tasksData, onTaskUpdat
                     start_date: parseDate(task.start_date),
                     end_date: parseDate(task.end_date)
                 })),
-                links: tasksData.links,
+                links: tasksData.links
             };
             (gantt as any).clearAll();
             (gantt as any).parse(transformedData, "json");
         }
     }, [tasksData]);
 
-    return <div ref={ganttContainer} style={{ width: '100%', height: '600px' }} />;
+    return <div ref={ganttContainer} style={{ width: "100%", height: "600px" }} />;
 };
 
 export default GanttChartComponent;

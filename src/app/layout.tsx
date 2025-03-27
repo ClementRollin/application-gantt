@@ -1,17 +1,23 @@
-// src/app/layout.tsx
-import 'bootstrap/dist/css/bootstrap.min.css';
-import './globals.css';
-import { Metadata } from 'next';
+import "bootstrap/dist/css/bootstrap.min.css";
+import "./globals.css";
+import { Inter } from "next/font/google";
+import { NextAuthProvider } from "./providers";
 
-export const metadata: Metadata = {
-    title: 'Application de Gantt',
-    description: 'Ajoutez vos tâches et visualisez un diagramme de Gantt complet.',
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata = {
+    title: "Gantt App",
+    description: "Gantt multi-groupes"
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode; }) {
     return (
         <html lang="fr">
-        <body>{children}</body>
+        <body className={inter.className}>
+        <NextAuthProvider>
+            {children}
+        </NextAuthProvider>
+        </body>
         </html>
     );
 }
