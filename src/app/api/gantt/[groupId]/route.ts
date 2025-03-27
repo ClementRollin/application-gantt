@@ -5,9 +5,9 @@ import { supabase } from "@/lib/supabaseClient";
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { groupId: string } }
+    { params }: any
 ): Promise<Response> {
-    const groupId = params.groupId;
+    const groupId = Array.isArray(params.groupId) ? params.groupId[0] : params.groupId;
     const groupIdNumber = Number(groupId);
     if (isNaN(groupIdNumber)) {
         return NextResponse.json({ error: "Paramètre groupId invalide" }, { status: 400 });
@@ -46,9 +46,9 @@ export async function GET(
 
 export async function PUT(
     request: NextRequest,
-    { params }: { params: { groupId: string } }
+    { params }: any
 ): Promise<Response> {
-    const groupId = params.groupId;
+    const groupId = Array.isArray(params.groupId) ? params.groupId[0] : params.groupId;
     const groupIdNumber = Number(groupId);
     if (isNaN(groupIdNumber)) {
         return NextResponse.json({ error: "Paramètre groupId invalide" }, { status: 400 });
