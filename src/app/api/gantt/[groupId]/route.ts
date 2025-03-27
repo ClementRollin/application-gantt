@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: Record<string, string> }
+    { params }: { params: { groupId: string | string[] } }
 ): Promise<Response> {
     try {
         const session = await getServerSession(authOptions);
